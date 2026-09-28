@@ -11,7 +11,7 @@ interface Bubble {
   tapback?: string | null;
 }
 
-type Presence = "here" | "fading" | "out";
+type Presence = "here" | "away";
 type Receipt = "delivered" | "read";
 
 const REVEAL_MS = 700;
@@ -144,11 +144,6 @@ export default function ChatClient() {
           return m.map((b, i) => (i === at ? { ...b, tapback: data.tapback.emoji } : b));
         });
       }
-      // She's out — the message sits as Delivered. Real silence.
-      if (data.asleep) {
-        setTyping(false);
-        return;
-      }
       // Simulated latency — she's typing, not a server.
       const remaining = Math.max(0, (data.replyDelayMs ?? 0) - (Date.now() - sentAt));
       if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
@@ -161,32 +156,37 @@ export default function ChatClient() {
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-white text-black">
-      {/* iOS-style header — centered avatar, name, presence */}
-      <header className="relative flex items-center border-b border-neutral-200 px-2 py-2">
-        <span aria-hidden className="p-2 text-[#0a84ff]">
+      {/* iOS-style header — centered avatar, name, presence.
+          pt clears the status bar / notch (viewportFit: cover);
+          the center block is in-flow so the header wraps it — nothing clips. */}
+      <header className="flex items-center border-b border-neutral-200 px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <span aria-hidden className="w-9 p-2 text-[#0a84ff]">
           <svg width="14" height="22" viewBox="0 0 14 22" fill="none">
             <path d="M13 1L2 11l11 10" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
-        <div className="pointer-events-none absolute inset-x-0 flex flex-col items-center">
+        <div className="flex flex-1 flex-col items-center">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-rose-300 to-amber-200 text-sm font-semibold text-white">
             J
           </div>
           <div className="mt-0.5 text-[13px] font-semibold leading-tight">Josefine</div>
-          <div className="flex items-center gap-1 text-[10px] text-neutral-500">
-            {presence === "out" ? (
-              <>🌙 sleeping</>
-            ) : presence === "here" || presence === "fading" ? (
+          <div className="flex items-center gap-1 text-[10px] leading-tight text-neutral-500">
+            {presence === "here" ? (
               <>
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#34c759]" />
-                active now
+                online
+              </>
+            ) : presence === "away" ? (
+              <>
+                <span className="inline-block h-1.5 w-1.5 rounded-full border border-[#34c759]" />
+                away
               </>
             ) : (
               <>AI companion</>
             )}
           </div>
         </div>
-        <div className="ml-auto p-2 text-[#0a84ff]">
+        <div className="flex w-9 items-center justify-center p-1.5 text-[#0a84ff]">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
             <circle cx="12" cy="12" r="9" />
             <path d="M12 8h.01M12 11v5" strokeLinecap="round" />

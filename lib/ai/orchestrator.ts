@@ -50,14 +50,12 @@ export interface OrchestrateResult {
   plan: AssistantResponse["plan"] | null;
   intention: ReturnType<typeof composeIntention> | null;
   directives: string[];
-  /** She's out (asleep/gone) — message was stored, nothing was generated. */
-  asleep: boolean;
   /** Simulated reply latency for the client's typing indicator. */
   replyDelayMs: number;
   /** Tapback she attached to the user's message (iMessage-style), if any. */
   tapback: { emoji: string; messageId: string } | null;
   /** Her presence state this turn — the client's header reads it. */
-  presence: "here" | "fading" | "out";
+  presence: "here" | "away";
   /** Async memory extraction — await via after() so it never blocks the reply. */
   extraction: Promise<unknown>;
 }
@@ -92,19 +90,19 @@ function saidGoodnightRecently(recent: MessageRow[], now: Date = new Date()): bo
 
 /**
  * Simulated reply latency — a person doesn't answer in 300ms forever.
- * Base jitter + typing time + late-hour penalty + loose mirroring of his pace.
+ * Base jitter + typing time + a night-hours penalty + loose mirroring of
+ * his pace.
  */
 function replyDelayMs(opts: {
   bubbles: string[];
-  fading: boolean;
+  awayPenaltyMs: number;
   lastUserGapMs: number;
 }): number {
   const base = 800 + Math.random() * 1800;
   const typing = Math.min(opts.bubbles.join("").length * 18, 4000);
-  const late = opts.fading ? 1200 : 0;
   const mirror =
     opts.lastUserGapMs > 5 * 60_000 ? Math.min(opts.lastUserGapMs / 20, 8000) : 0;
-  return Math.min(base + typing + late + mirror, 20_000);
+  return Math.min(base + typing + opts.awayPenaltyMs + mirror, 24_000);
 }
 
 export async function orchestrate(opts: {
@@ -145,44 +143,6 @@ export async function orchestrate(opts: {
     convoActive,
     now,
   });
-
-  if (presence.state === "out") {
-    // She's asleep/gone — the message lands, she'll see it later.
-    // Still extract: whatever he said at 2am informs tomorrow's reply.
-    await insertMessage(supabase, {
-      conversation_id: conversation.id,
-      role: "user",
-      content: userMessage,
-    });
-    await supabase
-      .from("conversations")
-      .update({ last_message_at: new Date().toISOString() })
-      .eq("id", conversation.id);
-    const extraction = extractAndStore({
-      model,
-      supabase,
-      userId,
-      conversationId: conversation.id,
-      exchange: [
-        ...recent.slice(-4).map((m) => ({ role: m.role, content: m.content })),
-        { role: "user" as const, content: userMessage },
-      ],
-      existingMemories: allMemories,
-      existingLoops: openLoops,
-    }).catch((e) => console.error("[extract] failed:", e));
-    return {
-      bubbles: [],
-      assistantMessages: [],
-      plan: null,
-      intention: null,
-      directives: ["presence: out"],
-      asleep: true,
-      replyDelayMs: 0,
-      tapback: null,
-      presence: "out",
-      extraction,
-    };
-  }
 
   // ── 2. Memory retrieval ───────────────────────────────────────────────────
   const recentEntities = extractRecentEntities(recent);
@@ -421,18 +381,21 @@ export async function orchestrate(opts: {
         new Date(lastAssistant.created_at).getTime()
       : 0;
 
+  const herHour = herNow(now).hour;
+  const awayPenaltyMs =
+    presence.state === "away" ? (herHour >= 1 && herHour < 7 ? 3000 : 1200) : 0;
+
   return {
     bubbles: out.bubbles,
     assistantMessages,
     plan: out.plan,
     intention,
     directives: directives.map((d) => `${d.rule}: ${d.reason}`),
-    asleep: false,
     tapback,
     presence: presence.state,
     replyDelayMs: replyDelayMs({
       bubbles: out.bubbles,
-      fading: presence.state === "fading",
+      awayPenaltyMs,
       lastUserGapMs: Math.max(0, hisGapMs),
     }),
     extraction,

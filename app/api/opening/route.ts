@@ -6,7 +6,7 @@ import {
   getOrCreateConversation,
   insertMessage,
 } from "@/lib/db/queries";
-import { currentPresence } from "@/lib/persona/presence";
+import { canInitiate } from "@/lib/persona/presence";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /** Called once when the chat screen mounts — may return a proactive opener. */
@@ -19,11 +19,8 @@ export async function GET() {
 
   await ensureProfile(supabase, user.id);
 
-  // She doesn't text you while asleep — presence beats proactivity.
-  const presence = await currentPresence(supabase, user.id);
-  if (presence.state === "out") {
-    return NextResponse.json({ bubbles: [], presence: "out" });
-  }
+  // Dead-night hours — she doesn't start conversations at 3am.
+  if (!canInitiate()) return NextResponse.json({ bubbles: [] });
 
   const model = getChatModel();
   const opening = await generateOpening({ supabase, model, userId: user.id });

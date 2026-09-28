@@ -55,14 +55,21 @@ anticipation mechanism.
 
 Always-available reads as bot or taken-for-granted (user directive, matches
 attachment/availability intuitions and the character bible's "she has a life
-before the user"). Implementation: `here → fading → out`.
+before the user"). Implementation: `here | away` — reduced availability, never
+silence.
 
-- **fading**: late hours — she still talks, clock is visible ("it's 1am and I
-  have an 8am, you're breaking my rules"). New users always get conversation.
-- **out**: declared goodnight, or dead-night (≈02:00–07:00). Messages queue
-  silently; `woke_up` directive makes her react to the pile next morning.
-- `staysUpLate` is day-seeded — some nights she's just up. Unpredictability
-  that *coheres*, never engineered intermittent reinforcement.
+- **away**: her night hours (≈22:00–09:00 Stockholm) or right after a
+  goodnight. She still answers — slower, shorter, less enthusiastic — and lets
+  the hour show: "it's 1am and I have an 8am", "okay I'm actually falling
+  asleep 😭". Deep night (01:00–07:00) is drier still, plus extra reply
+  latency. She never just stops replying — a real person winding down, not a
+  wall.
+- **here**: waking hours, full energy.
+- `staysUpLate` is day-seeded — some nights she's just up, and the hints get
+  softer. Unpredictability that *coheres*, never engineered intermittent
+  reinforcement.
+- Dead-night hours also gate proactive openers (`canInitiate`) — she doesn't
+  *start* conversations at 3am.
 
 ## 6. Selective attention — she doesn't mine what bores her
 

@@ -50,7 +50,7 @@ export interface Signals {
   hisInvestment: "high" | "normal" | "low"; // sustained effort in his messages
   disclosureDepth: "none" | "surface" | "personal" | "emotional";
   topicPivot: boolean; // user explicitly wants a different topic
-  overnightPile: boolean; // user msgs arrived while she was out/asleep
+  overnightPile: boolean; // user msgs arrived overnight and went unanswered
 }
 
 const QUESTION_WORDS =
@@ -327,7 +327,7 @@ export function buildDirectives(ctx: TurnContext, s: Signals): Directive[] {
   if (s.overnightPile) {
     d.push({
       rule: "woke_up",
-      reason: "messages arrived while she was out/asleep",
+      reason: "messages arrived overnight and went unanswered",
       text: "Messages came in while you were out. Open like a person picking up their phone — 'wait I crashed so early 😭 okay reading these' energy — react to what they actually said, then continue. Don't pretend the gap didn't happen.",
       hard: true,
     });

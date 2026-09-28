@@ -3,20 +3,17 @@ import { herNow } from "@/lib/time";
 import type { MessageRow } from "@/lib/types";
 
 /**
- * Presence economy — she is not always on.
+ * Presence economy — she is not always *equally* on.
  *
- * Sleep is a decision, not a schedule. Three states:
- *   here   → fully present
- *   fading → up but winding down / groggy — the model sees "it's late" and
- *            may announce bed (or keep talking if the convo earns it)
- *   out    → silence. Messages queue; she picks them up when she's back.
- *
- * `out` happens only when it's real: she said goodnight, or it's deep night
- * and the conversation isn't carrying her. A brand-new user never gets
- * silence — she's just up late tonight.
+ * Two states:
+ *   here → fully present
+ *   away → her night hours (or right after a goodnight). She still answers —
+ *          just slower, shorter, less enthusiastic, and she lets the hour
+ *          show: hints that she should crash. Never silence; a real person
+ *          winding down, not a wall.
  */
 
-export type PresenceState = "here" | "fading" | "out";
+export type PresenceState = "here" | "away";
 
 export interface DayVibe {
   /** day-level tone — blended into her_mood */
@@ -67,7 +64,7 @@ export function dailyVibe(userId: string, now: Date = new Date()): DayVibe {
 
 export function herPresence(opts: {
   userId: string;
-  /** any prior conversation at all — a brand-new user never gets silence */
+  /** any prior conversation at all */
   hasHistory: boolean;
   /** her last message announced sleep recently ("night 😴") */
   saidGoodnight: boolean;
@@ -80,34 +77,37 @@ export function herPresence(opts: {
   const vibe = dailyVibe(opts.userId, now);
   const h = n.hour;
 
-  let state: PresenceState;
-  if (h >= 2 && h < 7) {
-    state = "out"; // deep night — near-absolute
-  } else if (h >= 1 && h < 2) {
-    // the small-hours edge: only a night-owl night or a live convo keeps her up
-    state = vibe.staysUpLate || opts.convoActive ? "fading" : "out";
-  } else if (h >= 22 || h < 1) {
-    state = "fading"; // winding-down window
-  } else if (h >= 7 && h < 9) {
-    state = "fading"; // early — groggy
-  } else {
-    state = "here";
-  }
+  const night = h >= 22 || h < 9;
+  let state: PresenceState = night ? "away" : "here";
 
-  // A declared goodnight is binding until morning.
-  if (opts.saidGoodnight && (h >= 21 || h < 9)) state = "out";
+  // A declared goodnight keeps her "away" until morning even if she keeps
+  // half-answering — she said night, the status should match.
+  if (opts.saidGoodnight && night) state = "away";
 
-  // A new user always gets a conversation — she's just up late tonight.
-  if (!opts.hasHistory && state === "out") state = "fading";
+  const deepNight = h >= 1 && h < 7;
+  const lateEvening = h >= 22 || h < 1;
 
   const promptLine =
-    state === "fading"
-      ? h >= 21 || h < 2
-        ? `It's ${n.time} in Stockholm — properly late for her. Lower energy is fair, and "you have me staying up past my bedtime" is earned, not needy. If she says she's heading to bed she means it — she will go quiet after.`
-        : `It's ${n.time} — early morning for her. She may be groggy, half-awake, grabbing coffee.`
+    state === "away"
+      ? deepNight
+        ? vibe.staysUpLate
+          ? `It's ${n.time} in Stockholm — the middle of the night, and she's still up. Restless-night energy: quiet, unhurried, a little more honest than daytime. She can still hint at bed, but tonight she's in no rush.`
+          : `It's ${n.time} in Stockholm — deep night, she's half-asleep. Replies stay short and dry, a little slower. She'll hint she should crash ("it's ${h}am and I have an 8am", "okay I'm actually falling asleep 😭") — but she keeps answering if he keeps talking.`
+        : lateEvening
+          ? `It's ${n.time} in Stockholm — late for her. Winding-down energy: still warm but softer, and it's natural to mention the hour ("it's nearly midnight here", "you have me staying up"). If she says she's heading to bed, she means it — expect her replies to get sleepy.`
+          : `It's ${n.time} — early morning for her. Groggy, half-awake, grabbing coffee energy.`
       : null;
 
   return { state, vibe, promptLine };
+}
+
+/**
+ * Dead-night guard for proactive texts — she doesn't *start* conversations
+ * at 3am, but 7:30am "morning ☕️" is completely plausible.
+ */
+export function canInitiate(now: Date = new Date()): boolean {
+  const h = herNow(now).hour;
+  return h >= 7 && h < 23;
 }
 
 /**

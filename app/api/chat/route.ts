@@ -51,7 +51,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       bubbles: result.bubbles,
       messageIds: result.assistantMessages.map((m) => m.id),
-      asleep: result.asleep,
       replyDelayMs: result.replyDelayMs,
       tapback: result.tapback,
       presence: result.presence,
