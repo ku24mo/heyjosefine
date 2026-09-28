@@ -4,6 +4,7 @@ import {
   getOrCreateConversation,
   getRecentMessages,
 } from "@/lib/db/queries";
+import { currentPresence } from "@/lib/persona/presence";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -15,13 +16,18 @@ export async function GET() {
 
   await ensureProfile(supabase, user.id);
   const conversation = await getOrCreateConversation(supabase, user.id);
-  const messages = await getRecentMessages(supabase, conversation.id, 100);
+  const [messages, presence] = await Promise.all([
+    getRecentMessages(supabase, conversation.id, 100),
+    currentPresence(supabase, user.id),
+  ]);
   return NextResponse.json({
+    presence: presence.state,
     messages: messages.map((m) => ({
       id: m.id,
       role: m.role,
       content: m.content,
       created_at: m.created_at,
+      tapback: m.meta?.tapback ?? null,
     })),
   });
 }

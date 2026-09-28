@@ -54,8 +54,30 @@ export interface OrchestrateResult {
   asleep: boolean;
   /** Simulated reply latency for the client's typing indicator. */
   replyDelayMs: number;
+  /** Tapback she attached to the user's message (iMessage-style), if any. */
+  tapback: { emoji: string; messageId: string } | null;
+  /** Her presence state this turn — the client's header reads it. */
+  presence: "here" | "fading" | "out";
   /** Async memory extraction — await via after() so it never blocks the reply. */
   extraction: Promise<unknown>;
+}
+
+/** iOS tapbacks only — anything else she invents gets dropped. */
+const TAPBACKS = new Set(["❤️", "👍", "👎", "😂", "‼️", "❓"]);
+const TAPBACK_ALIASES: Record<string, string> = {
+  "❤": "❤️", heart: "❤️", love: "❤️",
+  "👍🏻": "👍", thumbsup: "👍", "+1": "👍",
+  "👎🏻": "👎", thumbsdown: "👎", "-1": "👎",
+  haha: "😂", "😹": "😂", "🤣": "😂", lol: "😂",
+  "!!": "‼️", "!": "‼️",
+  "?": "❓",
+};
+
+function normalizeTapback(emoji: string | undefined | null): string | null {
+  if (!emoji) return null;
+  const t = emoji.trim();
+  if (TAPBACKS.has(t)) return t;
+  return TAPBACK_ALIASES[t.toLowerCase()] ?? null;
 }
 
 const GOODNIGHT = /\b(night|good ?night|sleep|bed|crash|gn\b|natt|😴|💤)\b/i;
@@ -156,6 +178,8 @@ export async function orchestrate(opts: {
       directives: ["presence: out"],
       asleep: true,
       replyDelayMs: 0,
+      tapback: null,
+      presence: "out",
       extraction,
     };
   }
@@ -257,7 +281,7 @@ export async function orchestrate(opts: {
   if (!out.bubbles.length) out.bubbles = ["hmm"];
 
   // ── 6. Persist messages ───────────────────────────────────────────────────
-  await insertMessage(supabase, {
+  const userMsgRow = await insertMessage(supabase, {
     conversation_id: conversation.id,
     role: "user",
     content: userMessage,
@@ -283,6 +307,19 @@ export async function orchestrate(opts: {
     .from("conversations")
     .update({ last_message_at: new Date().toISOString() })
     .eq("id", conversation.id);
+
+  // ── 6b. Tapback — iMessage-style reaction on his message ──────────────────
+  // Rate-limited: never twice in a row, never on a dead conversation.
+  let tapback: OrchestrateResult["tapback"] = null;
+  const tbEmoji = normalizeTapback(out.tapback?.emoji);
+  const recentTapbacked = recent.slice(-6).some((m) => m.meta?.tapback != null);
+  if (tbEmoji && !recentTapbacked) {
+    await supabase
+      .from("messages")
+      .update({ meta: { ...userMsgRow.meta, tapback: tbEmoji } })
+      .eq("id", userMsgRow.id);
+    tapback = { emoji: tbEmoji, messageId: userMsgRow.id };
+  }
 
   // ── 7. State update ───────────────────────────────────────────────────────
   const asked = out.bubbles.some(looksLikeQuestion);
@@ -391,6 +428,8 @@ export async function orchestrate(opts: {
     intention,
     directives: directives.map((d) => `${d.rule}: ${d.reason}`),
     asleep: false,
+    tapback,
+    presence: presence.state,
     replyDelayMs: replyDelayMs({
       bubbles: out.bubbles,
       fading: presence.state === "fading",

@@ -19,8 +19,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} h-full antialiased dark`}>
-      <body className="min-h-full bg-neutral-950">{children}</body>
+    <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
+      <body className="min-h-full bg-white">{children}</body>
     </html>
   );
 }

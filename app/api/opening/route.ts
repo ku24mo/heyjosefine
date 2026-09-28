@@ -6,6 +6,7 @@ import {
   getOrCreateConversation,
   insertMessage,
 } from "@/lib/db/queries";
+import { currentPresence } from "@/lib/persona/presence";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /** Called once when the chat screen mounts — may return a proactive opener. */
@@ -17,6 +18,13 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   await ensureProfile(supabase, user.id);
+
+  // She doesn't text you while asleep — presence beats proactivity.
+  const presence = await currentPresence(supabase, user.id);
+  if (presence.state === "out") {
+    return NextResponse.json({ bubbles: [], presence: "out" });
+  }
+
   const model = getChatModel();
   const opening = await generateOpening({ supabase, model, userId: user.id });
   if (!opening) return NextResponse.json({ bubbles: [] });
@@ -27,7 +35,7 @@ export async function GET() {
       conversation_id: conversation.id,
       role: "assistant",
       content,
-      meta: { bubble_index: i, intention: { acts: ["callback"], openness: "leave_open", targetLength: "short" } },
+      meta: { bubble_index: i, intention: { acts: ["callback"], openness: "leave_open", targetLength: "short", form: "single" } },
     });
   }
   await supabase

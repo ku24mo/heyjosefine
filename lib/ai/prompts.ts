@@ -123,9 +123,11 @@ INTENTION: acts = ${intention.acts.join(" + ")}; openness = ${intention.openness
 {
   "plan": {"user_intent": "...", "user_emotion": "..."|null, "move": "...", "memory_ids_used": [], "beat_transition": null|beat, "wants_to_mention_life_thread": null|thread_slug},
   "bubbles": ["...", "..."],
+  "tapback": {"emoji": "❤️"} | null,
   "state_update": {"mood","energy","warmth","curiosity","seriousness","recent_emotion","current_topic","her_mood","her_energy"} (only fields that should change)
 }
-bubbles = separate texts she'd send. Each bubble must add something new — never restate the same beat in different words. When in doubt, fewer bubbles. Splitting a beat across 2 bubbles is natural; do not split every sentence. No markdown, no lists — she texts.`);
+bubbles = separate texts she'd send. Each bubble must add something new — never restate the same beat in different words. When in doubt, fewer bubbles. Splitting a beat across 2 bubbles is natural; do not split every sentence. No markdown, no lists — she texts.
+tapback = an iMessage-style reaction attached to HIS latest message — one of ❤️ 👍 👎 😂 ‼️ ❓ or null. Rare (~1 turn in 6): only when a reaction genuinely says it better than words (he said something sweet/funny/bold). Can accompany a texted reply.`);
 
   return sections.join("\n\n");
 }

@@ -123,6 +123,15 @@ export const responseSchema = z.object({
   bubbles: bubblesArray.describe(
     "the reply as 1-4 texting-style message bubbles"
   ),
+  /**
+   * iMessage-style tapback on the user's latest message. Sparingly —
+   * a reaction, not a habit. null = none.
+   */
+  tapback: z
+    .object({ emoji: z.string().max(8) })
+    .nullable()
+    .catch(null)
+    .default(null),
   state_update: z
     .object({
       mood: z.string(),

@@ -1,4 +1,6 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { herNow } from "@/lib/time";
+import type { MessageRow } from "@/lib/types";
 
 /**
  * Presence economy — she is not always on.
@@ -106,4 +108,51 @@ export function herPresence(opts: {
       : null;
 
   return { state, vibe, promptLine };
+}
+
+/**
+ * Read-side presence for API routes (header status, opening guard).
+ * Same inputs as the orchestrator computes, minus generation.
+ */
+export async function currentPresence(
+  supabase: SupabaseClient,
+  userId: string,
+  now: Date = new Date()
+): Promise<PresenceInfo> {
+  const { data: convo } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let recent: Pick<MessageRow, "role" | "content" | "created_at">[] = [];
+  if (convo) {
+    const { data } = await supabase
+      .from("messages")
+      .select("role,content,created_at")
+      .eq("conversation_id", convo.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    recent = ((data ?? []) as typeof recent).reverse();
+  }
+
+  const lastAssistant = [...recent].reverse().find((m) => m.role === "assistant");
+  const lastUser = [...recent].reverse().find((m) => m.role === "user");
+  const goodnight =
+    lastAssistant != null &&
+    /night|good ?night|sleep|bed|crash|😴|💤|gn\b|natt/i.test(lastAssistant.content) &&
+    now.getTime() - new Date(lastAssistant.created_at).getTime() < 8 * 3_600_000;
+  const convoActive =
+    lastUser != null &&
+    now.getTime() - new Date(lastUser.created_at).getTime() < 20 * 60_000;
+
+  return herPresence({
+    userId,
+    hasHistory: recent.length > 0,
+    saidGoodnight: goodnight,
+    convoActive,
+    now,
+  });
 }

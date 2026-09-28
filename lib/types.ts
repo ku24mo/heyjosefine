@@ -17,6 +17,8 @@ export interface MessageMeta {
   directives?: string[]; // rule reasons, for eval/debug
   intention?: Intention;
   beat?: Beat;
+  /** iMessage-style tapback she attached to this message (emoji) */
+  tapback?: string;
 }
 
 export type MemoryCategory =
@@ -163,6 +165,8 @@ export interface ResponsePlan {
 export interface AssistantResponse {
   plan: ResponsePlan;
   bubbles: string[];
+  /** iMessage-style tapback on the user's latest message — sparingly */
+  tapback?: { emoji: string } | null;
   state_update?: Partial<
     Pick<
       ConversationStateRow,

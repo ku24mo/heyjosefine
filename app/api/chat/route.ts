@@ -53,6 +53,8 @@ export async function POST(request: Request) {
       messageIds: result.assistantMessages.map((m) => m.id),
       asleep: result.asleep,
       replyDelayMs: result.replyDelayMs,
+      tapback: result.tapback,
+      presence: result.presence,
     });
   } catch (err) {
     console.error("[/api/chat] orchestration failed:", err);
