@@ -19,6 +19,8 @@ export const CONFIG = {
   // Conversation rhythm
   rhythm: {
     maxConsecutiveQuestions: 3,
+    questionCooldownWindow: 8, // assistant bubbles scanned for interrogative shape
+    questionCooldownMin: 4, // ≥ this many questions in the window → forced statement turn
     recentMessageWindow: 24, // messages loaded per turn
     minDelayMs: 600, // typing indicator floor
     bubbleDelayMs: 900, // delay between bubble reveals

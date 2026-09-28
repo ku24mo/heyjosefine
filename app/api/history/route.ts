@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getOrCreateConversation, getRecentMessages } from "@/lib/db/queries";
+import {
+  ensureProfile,
+  getOrCreateConversation,
+  getRecentMessages,
+} from "@/lib/db/queries";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -9,6 +13,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+  await ensureProfile(supabase, user.id);
   const conversation = await getOrCreateConversation(supabase, user.id);
   const messages = await getRecentMessages(supabase, conversation.id, 100);
   return NextResponse.json({

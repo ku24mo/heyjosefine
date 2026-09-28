@@ -1,7 +1,11 @@
 import { after, NextResponse } from "next/server";
 import { getChatModel } from "@/lib/ai/deepseek";
 import { orchestrate } from "@/lib/ai/orchestrator";
-import { ensureProfile } from "@/lib/db/queries";
+import {
+  ensureProfile,
+  getOrCreateConversation,
+  insertMessage,
+} from "@/lib/db/queries";
 import { CRISIS_RESPONSE, isCrisisMessage } from "@/lib/safety/crisis";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { checkUsage, incrementUsage } from "@/lib/usage";
@@ -50,6 +54,18 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("[/api/chat] orchestration failed:", err);
+    // Persist their message — she "read it and zoned out", so the next turn
+    // still has the context even though the reply degraded.
+    try {
+      const conversation = await getOrCreateConversation(supabase, user.id);
+      await insertMessage(supabase, {
+        conversation_id: conversation.id,
+        role: "user",
+        content: message,
+      });
+    } catch (e) {
+      console.error("[/api/chat] failed to persist degraded user msg:", e);
+    }
     // Graceful degradation — a human-ish shrug beats a 500 in the UI.
     return NextResponse.json({
       bubbles: ["sorry, I completely zoned out 😅 what were you saying?"],

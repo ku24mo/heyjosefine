@@ -109,9 +109,17 @@ export const responseSchema = z.object({
       .string()
       .describe("her suggested conversational move — advisory, may be overridden"),
     memory_ids_used: z.array(z.string()).default([]),
-    beat_transition: beatEnum.nullable().default(null),
+    beat_transition: beatEnum.nullable().catch(null).default(null),
     wants_to_mention_life_thread: z.string().nullable().default(null),
-  }),
+  })
+    .catch({
+      user_intent: "",
+      user_emotion: null,
+      move: "",
+      memory_ids_used: [],
+      beat_transition: null,
+      wants_to_mention_life_thread: null,
+    }),
   bubbles: bubblesArray.describe(
     "the reply as 1-4 texting-style message bubbles"
   ),

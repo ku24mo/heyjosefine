@@ -29,7 +29,12 @@ import type {
 import { composeIntention } from "./intention";
 import type { ChatModel, ChatMessage } from "./provider";
 import { buildSystemPrompt } from "./prompts";
-import { buildDirectives, computeSignals, type TurnContext } from "./rules";
+import {
+  buildDirectives,
+  computeSignals,
+  looksLikeQuestion,
+  type TurnContext,
+} from "./rules";
 import { responseSchema } from "./schemas";
 
 /**
@@ -118,8 +123,8 @@ export async function orchestrate(opts: {
 
   // ── 5. Post-validation — hard rules get teeth ─────────────────────────────
   const hardNoQuestion =
-    signals.questionBudgetLeft === 0 || directives.some((d) => d.rule === "question_cap" && d.hard);
-  if (hardNoQuestion && out.bubbles.some((b) => b.includes("?"))) {
+    signals.questionBudgetLeft === 0 || directives.some((d) => d.noQuestion);
+  if (hardNoQuestion && out.bubbles.some(looksLikeQuestion)) {
     out = await model.generateStructured({
       schema: responseSchema,
       messages: [
@@ -173,7 +178,7 @@ export async function orchestrate(opts: {
     .eq("id", conversation.id);
 
   // ── 7. State update ───────────────────────────────────────────────────────
-  const asked = out.bubbles.some((b) => b.trim().endsWith("?"));
+  const asked = out.bubbles.some(looksLikeQuestion);
   const fam = computeFamiliarity(state, {
     meaningfulExchange: out.bubbles.join(" ").length > 200 || signals.expressesEmotion,
   });

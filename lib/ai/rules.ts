@@ -25,6 +25,7 @@ export interface Directive {
   reason: string;
   text: string; // injected into the prompt
   hard?: boolean; // enforced post-generation, not just suggested
+  noQuestion?: boolean; // post-validation regenerates if the reply asks one
 }
 
 export interface Signals {
@@ -39,11 +40,35 @@ export interface Signals {
   dueOpenLoop: OpenLoopRow | null;
   questionBudgetLeft: number;
   askHeavy: boolean; // act histogram skewed toward asking
+  questionCooldown: boolean; // too many questions across a recent window
+  userPushesBack: boolean; // user called out the interrogation
+  asksAboutHer: boolean; // user is asking about HER
   emotionalCharge: boolean;
   hoursSinceLast: number; // gap since the previous turn
 }
 
-const QUESTION_WORDS = /^(who|what|when|where|why|how|which|whose|whom|is|are|was|were|do|does|did|can|could|should|would|will|have|has)\b/i;
+const QUESTION_WORDS =
+  /^(who|what|when|where|why|how|which|whose|whom|is|are|was|were|do|does|did|can|could|should|would|will|have|has|whr|whats|wat|wbu|hbu)\b/i;
+const PUSHBACK =
+  /\b(enough (about|bout|of)|stop (with )?(the |all )?questions|so many questions|why (are|r) (u|you) (so )?(interested|asking)|awfully interested|interview|interrogat|third degree)\b/i;
+const ABOUT_HER = new RegExp(
+  [
+    "tell me (about|bout) (u|you|ur|yourself|urself)",
+    "what about (u|you)",
+    "what do (u|you) do",
+    "whr (r |are )?(u|you)",
+    "where (r|are) (u|you) from",
+    "(u|you)r (name|job|work|life|story)",
+    "do (u|you) (work|study|live)",
+    "(u|you) (work|study|live) or",
+  ].join("|"),
+  "i"
+);
+const ABOUT_HER_BARE = /^(and )?(u|you|wbu|hbu|yours)[?!.\s]*$/i;
+
+/** Interrogative shape — punctuation OR leading question word. Textese counts. */
+export const looksLikeQuestion = (text: string) =>
+  text.includes("?") || QUESTION_WORDS.test(text.trim());
 const ADVICE_SEEK = /\b(should i|what do you think|what would you do|advice|help me decide|do you think i should|what do i do)\b/i;
 const EMOTION_WORDS =
   /\b(sad|depressed|anxious|anxiety|scared|worried|stress|stressed|angry|furious|hurt|lonely|alone|exhausted|tired|terrible|awful|horrible|amazing|excited|happy|proud|heartbroken|miss|cried|cry|upset|frustrated|shit|fucked up|devastated|nervous|afraid)\b/i;
@@ -55,7 +80,7 @@ export function computeSignals(ctx: TurnContext): Signals {
   const msg = ctx.userMessage.trim();
   const words = msg.split(/\s+/).length;
 
-  const asksQuestion = msg.includes("?") || QUESTION_WORDS.test(msg);
+  const asksQuestion = looksLikeQuestion(msg);
   const expressesEmotion = EMOTION_WORDS.test(msg);
   const isShortCasual = words <= 4 || GREETING_ONLY.test(msg);
   const isRude = RUDE_WORDS.test(msg);
@@ -96,6 +121,19 @@ export function computeSignals(ctx: TurnContext): Signals {
   const askCount = acts.find(([a]) => a === "ask")?.[1] ?? 0;
   const askHeavy = total >= 4 && askCount / total > 0.5;
 
+  // Windowed question rate — consecutive-only caps are easy to evade with a
+  // react+ask alternation, which still feels like an interview.
+  const recentAssistant = ctx.recentMessages
+    .filter((m) => m.role === "assistant")
+    .slice(-CONFIG.rhythm.questionCooldownWindow);
+  const recentQuestions = recentAssistant.filter((m) =>
+    looksLikeQuestion(m.content)
+  ).length;
+  const questionCooldown = recentQuestions >= CONFIG.rhythm.questionCooldownMin;
+
+  const userPushesBack = PUSHBACK.test(msg);
+  const asksAboutHer = ABOUT_HER.test(msg) || ABOUT_HER_BARE.test(msg);
+
   const mentionsNewTopic =
     ctx.state.current_topic != null &&
     msg.length > 20 &&
@@ -113,6 +151,9 @@ export function computeSignals(ctx: TurnContext): Signals {
     dueOpenLoop,
     questionBudgetLeft,
     askHeavy,
+    questionCooldown,
+    userPushesBack,
+    asksAboutHer,
     emotionalCharge: expressesEmotion || ctx.state.recent_emotion != null,
     hoursSinceLast,
   };
@@ -136,6 +177,29 @@ export function buildDirectives(ctx: TurnContext, s: Signals): Directive[] {
       reason: `${CONFIG.rhythm.maxConsecutiveQuestions} consecutive assistant questions`,
       text: "Do NOT end with or include a question this turn. React, share something of yours, or make a statement instead — interrogation mode is off.",
       hard: true,
+      noQuestion: true,
+    });
+  }
+
+  // ── Question cooldown (windowed) ─────────────────────────────────────────
+  if (s.questionCooldown) {
+    d.push({
+      rule: "question_cooldown",
+      reason: "too many questions across recent replies",
+      text: "Do NOT ask a question this turn — react, share, or make a statement. They're starting to feel interviewed.",
+      hard: true,
+      noQuestion: true,
+    });
+  }
+
+  // ── User called out the interrogation ────────────────────────────────────
+  if (s.userPushesBack) {
+    d.push({
+      rule: "pushback",
+      reason: "user pushed back on the questioning",
+      text: "They just told you you're asking a lot. Own it lightly ('lol fair, okay no more questions') and do NOT ask anything this turn.",
+      hard: true,
+      noQuestion: true,
     });
   }
 
@@ -155,6 +219,15 @@ export function buildDirectives(ctx: TurnContext, s: Signals): Directive[] {
       rule: "answer_questions",
       reason: "user asked a question",
       text: "Answer the question naturally first — don't dodge it or answer with a question.",
+    });
+  }
+
+  // ── Asked about HER → actually answer ─────────────────────────────────────
+  if (s.asksAboutHer) {
+    d.push({
+      rule: "share_about_her",
+      reason: "user asked about her",
+      text: "They asked about YOU. Answer with 1-2 real specifics from your actual life (school, modeling, Odin — whatever fits) — short is fine, evasive is not ('not much to tell' is a banned dodge). A bounce-back question is optional, not required.",
     });
   }
 

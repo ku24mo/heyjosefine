@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getChatModel } from "@/lib/ai/deepseek";
 import { generateOpening } from "@/lib/ai/opening";
-import { getOrCreateConversation, insertMessage } from "@/lib/db/queries";
+import {
+  ensureProfile,
+  getOrCreateConversation,
+  insertMessage,
+} from "@/lib/db/queries";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /** Called once when the chat screen mounts — may return a proactive opener. */
@@ -12,6 +16,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
+  await ensureProfile(supabase, user.id);
   const model = getChatModel();
   const opening = await generateOpening({ supabase, model, userId: user.id });
   if (!opening) return NextResponse.json({ bubbles: [] });

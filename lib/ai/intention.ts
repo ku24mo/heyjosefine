@@ -19,6 +19,8 @@ export function composeIntention(
     acts.push("challenge");
   } else if (s.wantsInfo) {
     acts.push("answer");
+  } else if (s.asksAboutHer) {
+    acts.push("share"); // asked about her → share real specifics
   } else if (s.expressesEmotion) {
     acts.push("react"); // acknowledge first, always
   } else if (s.isShortCasual) {
@@ -43,14 +45,16 @@ export function composeIntention(
   const canTease = ctx.state.stage !== "new" && !s.expressesEmotion && !s.isRude;
   if (canTease && Math.random() < 0.25) acts.push("tease");
 
-  // Ask — bounded by budget and reciprocity, not reflexive.
+  // Ask — bounded by budget, cooldown, and reciprocity, not reflexive.
   const mayAsk =
     s.questionBudgetLeft > 0 &&
     !has("question_cap") &&
+    !s.questionCooldown &&
+    !s.userPushesBack &&
     !(s.askHeavy && !s.expressesEmotion);
   const shouldAsk =
     s.expressesEmotion || // explore feelings
-    (!s.wantsInfo && Math.random() < 0.55); // curiosity, not habit
+    (!s.wantsInfo && !s.asksAboutHer && Math.random() < 0.4); // curiosity, not habit
   if (mayAsk && shouldAsk) acts.push("ask");
 
   // Dedupe, cap at 3 acts.
