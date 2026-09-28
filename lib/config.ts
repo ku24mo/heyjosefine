@@ -44,10 +44,11 @@ export const CONFIG = {
     maxOpenersConsidered: 5,
   },
 
-  // Usage limits (free tier)
+  // Usage limits (free tier) — raised during dev testing; the paywall
+  // behavior itself is verified. Tighten before real users.
   usage: {
-    freeDailyLimit: 20, // user messages per day
-    freeTotalLimit: 200, // lifetime cap → paywall stub
+    freeDailyLimit: 500, // user messages per day
+    freeTotalLimit: 5000, // lifetime cap → paywall stub
   },
 
   // Mood momentum
