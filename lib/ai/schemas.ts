@@ -30,10 +30,46 @@ const entityTypeEnum = z.enum([
   "thing",
 ]);
 
+/** Word-form numbers the model occasionally emits instead of a float. */
+const WORD_NUM: Record<string, number> = {
+  "very low": 0.15,
+  low: 0.3,
+  medium: 0.5,
+  moderate: 0.5,
+  high: 0.8,
+  "very high": 0.95,
+};
+
+/** "0.7" → 0.7, "75%" → 75, "high" → 0.8; unparseable passes through. */
+const toNumber = (v: unknown): unknown => {
+  if (typeof v !== "string") return v;
+  const s = v.trim().toLowerCase();
+  const n = parseFloat(s.replace(/[^0-9.\-]/g, ""));
+  if (!Number.isNaN(n)) return n;
+  return WORD_NUM[s] ?? v;
+};
+
 /** Models often emit 0-100 despite asking for 0-1 — normalize either way. */
 const unitInterval = z.preprocess(
-  (v) => (typeof v === "number" && v > 1 ? v / 100 : v),
+  (v) => {
+    const n = toNumber(v);
+    return typeof n === "number" && n > 1 ? n / 100 : n;
+  },
   z.number().min(0).max(1)
+);
+
+/** Advisory state fields: a garbage value drops the field, not the reply. */
+const softUnit = unitInterval.optional().catch(undefined);
+
+/** Reply bubbles: tolerate a bare string, blanks, and >4 entries. */
+const bubblesArray = z.preprocess(
+  (v) => {
+    const arr = typeof v === "string" ? [v] : v;
+    return Array.isArray(arr)
+      ? arr.filter((b) => typeof b === "string" && b.trim()).slice(0, 4)
+      : arr;
+  },
+  z.array(z.string().min(1)).min(1).max(4)
 );
 
 /**
@@ -47,12 +83,13 @@ const lenientArray = <T extends z.ZodTypeAny>(item: T) =>
     z.array(item)
   );
 
-/** importance/emotional_weight 1-10; models may emit 0-100. */
+/** importance/emotional_weight 1-10; models may emit 0-100 or "8". */
 const score110 = z.preprocess(
   (v) => {
-    if (typeof v !== "number") return v;
-    if (v > 10) return v / 10;
-    return v;
+    const n = toNumber(v);
+    if (typeof n !== "number") return n;
+    if (n > 10) return n / 10;
+    return n;
   },
   z.number().min(1).max(10)
 );
@@ -75,22 +112,20 @@ export const responseSchema = z.object({
     beat_transition: beatEnum.nullable().default(null),
     wants_to_mention_life_thread: z.string().nullable().default(null),
   }),
-  bubbles: z
-    .array(z.string().min(1))
-    .min(1)
-    .max(4)
-    .describe("the reply as 1-4 texting-style message bubbles"),
+  bubbles: bubblesArray.describe(
+    "the reply as 1-4 texting-style message bubbles"
+  ),
   state_update: z
     .object({
       mood: z.string(),
-      energy: unitInterval,
-      warmth: unitInterval,
-      curiosity: unitInterval,
-      seriousness: unitInterval,
-      recent_emotion: z.string().nullable(),
-      current_topic: z.string().nullable(),
+      energy: softUnit,
+      warmth: softUnit,
+      curiosity: softUnit,
+      seriousness: softUnit,
+      recent_emotion: z.string().nullable().catch(null),
+      current_topic: z.string().nullable().catch(null),
       her_mood: z.string(),
-      her_energy: unitInterval,
+      her_energy: softUnit,
     })
     .partial()
     .optional(),
@@ -148,6 +183,6 @@ export type ExtractionOutput = z.infer<typeof extractionSchema>;
 
 /** Opening message generation (lib/ai/opening.ts). */
 export const openingSchema = z.object({
-  bubbles: z.array(z.string().min(1)).min(1).max(3),
+  bubbles: bubblesArray,
 });
 export type OpeningOutput = z.infer<typeof openingSchema>;

@@ -6,7 +6,43 @@ import type { ChatModel } from "../../lib/ai/provider";
  * The headline metric: "would I reply?"
  */
 
-export const judgeSchema = z.object({
+/**
+ * Judge models sometimes nest scores or rename keys — flatten common
+ * variants before validating so one odd response doesn't lose the judgment.
+ */
+const flattenJudge = (v: unknown): unknown => {
+  if (typeof v !== "object" || v === null) return v;
+  const obj = { ...(v as Record<string, unknown>) };
+  for (const key of ["scores", "ratings", "dimensions", "evaluation"]) {
+    if (typeof obj[key] === "object" && obj[key] !== null) {
+      Object.assign(obj, obj[key]);
+      delete obj[key];
+    }
+  }
+  const aliases: Record<string, string[]> = {
+    question_quality: ["questions", "questionQuality"],
+    memory_use: ["memory", "memoryUse"],
+    personality_consistency: ["persona", "personality", "personalityConsistency"],
+    emotional_appropriateness: ["emotion", "emotional", "emotionalAppropriateness"],
+    would_reply: ["wouldReply", "reply", "would_continue"],
+    violated_checks: ["violatedChecks", "violations", "checks_violated"],
+  };
+  for (const [canon, names] of Object.entries(aliases)) {
+    if (obj[canon] === undefined) {
+      for (const n of names) {
+        if (obj[n] !== undefined) {
+          obj[canon] = obj[n];
+          break;
+        }
+      }
+    }
+  }
+  return obj;
+};
+
+export const judgeSchema = z.preprocess(
+  flattenJudge,
+  z.object({
   naturalness: z.number().min(1).max(5),
   question_quality: z.number().min(1).max(5),
   memory_use: z.number().min(1).max(5),
@@ -20,8 +56,9 @@ export const judgeSchema = z.object({
     z.boolean()
   ),
   violated_checks: z.array(z.string()).default([]),
-  notes: z.string(),
-});
+  notes: z.string().default(""),
+  })
+);
 export type JudgeResult = z.infer<typeof judgeSchema>;
 
 const JUDGE_PROMPT = `You are evaluating a conversation between a USER and JOSEFINE, an AI companion persona (22, Swedish law student/model — playful, warm, a little guarded with strangers, teases once comfortable, bounded knowledge like a real person).
