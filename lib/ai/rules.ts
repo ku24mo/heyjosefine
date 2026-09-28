@@ -1,4 +1,5 @@
 import { CONFIG } from "@/lib/config";
+import { herNow } from "@/lib/time";
 import type {
   Beat,
   ConversationStateRow,
@@ -14,7 +15,7 @@ import type {
 
 export interface TurnContext {
   userMessage: string;
-  recentMessages: { role: "user" | "assistant"; content: string }[];
+  recentMessages: { role: "user" | "assistant"; content: string; created_at?: string }[];
   memories: MemoryRow[];
   openLoops: OpenLoopRow[];
   state: ConversationStateRow;
@@ -45,6 +46,11 @@ export interface Signals {
   asksAboutHer: boolean; // user is asking about HER
   emotionalCharge: boolean;
   hoursSinceLast: number; // gap since the previous turn
+  topicInterest: "high" | "neutral" | "low"; // how much SHE would actually care
+  hisInvestment: "high" | "normal" | "low"; // sustained effort in his messages
+  disclosureDepth: "none" | "surface" | "personal" | "emotional";
+  topicPivot: boolean; // user explicitly wants a different topic
+  overnightPile: boolean; // user msgs arrived while she was out/asleep
 }
 
 const QUESTION_WORDS =
@@ -65,6 +71,55 @@ const ABOUT_HER = new RegExp(
   "i"
 );
 const ABOUT_HER_BARE = /^(and )?(u|you|wbu|hbu|yours)[?!.\s]*$/i;
+
+/**
+ * What SHE would actually care about — distilled from the character bible,
+ * not topic logic. The meta-rule: interest = does this reveal who he is.
+ * High wins over low when both hit ("my girl is into crypto" is about her).
+ */
+const HIGH_INTEREST =
+  /\b(gf|girl|girlfriend|boyfriend|crush|ex\b|date|dates|dating|married|marriage|wife|relationship|in love|feel|feeling|felt|scared|nervous|worried|dream|ambition|goal|quit|leaving|moving|travel|trip|holiday|road ?trip|driv(e|ing)|car|cars|fashion|style|outfit|gym|tennis|dog|dogs|puppy|friend|friends|drama|party|weekend|music|concert|famil|mum|dad|sister|brother|miss (u|you)|sleep|insomnia|lonely|home)\b/i;
+const LOW_INTEREST =
+  /\b(code|coding|programming|javascript|typescript|python|software|server|database|algorithm|api\b|sql\b|crypto|bitcoin|stock market|inflation|election|tax(es)?\b|mortgage|concrete|lumber|drywall|plumbing|hvac|scaffold|welding|torque|specs|fps\b)\b/i;
+
+const TOPIC_PIVOT =
+  /\b(talk(ing)? about (something|somethin) (else|new|different)|something else( to talk about)?|new topic|different topic|another topic|change (the )?(subject|topic)|move on( to)? (something|a new|another)|enough (about|bout|of|with) (this|that|it|my|the)|off this topic|new subject|bored of (this|that))\b/i;
+
+const STOP_WORDS = new Set(
+  "with,this,that,about,what,when,from,have,has,your,you,for,and,did,was,are,they,them,his,her,she,will,would,should,their,been,being,were,into,after,before,still,waiting,hear,whether,follow,ask,loop,pending,decision".split(",")
+);
+
+/**
+ * A loop whose keywords the USER already covered is dead — nudging it is
+ * how you get "we literally just talked about this". Only his messages
+ * count: her asking about it doesn't cover it (the foundations bug).
+ */
+function loopCoveredRecently(
+  loop: OpenLoopRow,
+  recent: TurnContext["recentMessages"],
+  currentMessage: string
+): boolean {
+  const terms = loop.description
+    .toLowerCase()
+    .split(/[^a-z']+/)
+    .filter((w) => w.length > 3 && !STOP_WORDS.has(w));
+  if (!terms.length) return false;
+  const userText = (
+    recent
+      .filter((m) => m.role === "user")
+      .slice(-8)
+      .map((m) => m.content)
+      .join(" ") +
+    " " +
+    currentMessage
+  ).toLowerCase();
+  const hits = terms.filter((t) => {
+    // stem-ish match: "subcontracted" should cover "subcontracting"
+    const stem = t.slice(0, Math.max(4, t.length - 3));
+    return userText.includes(t) || (stem.length >= 4 && userText.includes(stem));
+  }).length;
+  return hits / terms.length >= 0.6 && hits >= 2;
+}
 
 /** Interrogative shape — punctuation OR leading question word. Textese counts. */
 export const looksLikeQuestion = (text: string) =>
@@ -96,8 +151,12 @@ export function computeSignals(ctx: TurnContext): Signals {
     ) ?? null;
 
   // Most pressing open loop: importance × emotional weight, prefer due soon.
+  // Loops the user already covered are filtered out — dead loops nudging
+  // forever was the "wats with u coming back to foundations" bug.
   const now = Date.now();
-  const active = ctx.openLoops.filter((l) => l.status === "active");
+  const active = ctx.openLoops.filter(
+    (l) => l.status === "active" && !loopCoveredRecently(l, ctx.recentMessages, msg)
+  );
   const scored = active
     .map((l) => {
       const dueBoost =
@@ -134,6 +193,62 @@ export function computeSignals(ctx: TurnContext): Signals {
   const userPushesBack = PUSHBACK.test(msg);
   const asksAboutHer = ABOUT_HER.test(msg) || ABOUT_HER_BARE.test(msg);
 
+  // Selective interest — would SHE actually care? Human-revealing topics win
+  // over jargon; interest drives engagement depth, not just question rate.
+  const topicInterest: Signals["topicInterest"] = HIGH_INTEREST.test(msg)
+    ? "high"
+    : LOW_INTEREST.test(msg)
+      ? "low"
+      : "neutral";
+
+  // Investment mirroring — her effort tracks his. Sustained one-word energy
+  // means she cools off or teases it, not performs harder for him.
+  const hisRecent = [
+    ...ctx.recentMessages
+      .filter((m) => m.role === "user")
+      .slice(-4)
+      .map((m) => m.content),
+    msg,
+  ];
+  const effort = (t: string) =>
+    t.trim().split(/\s+/).length > 10 || looksLikeQuestion(t) || /!|😂|lol|haha/i.test(t);
+  const lowEffort =
+    hisRecent.length >= 4 &&
+    hisRecent.every((t) => t.trim().split(/\s+/).length <= 6 && !effort(t));
+  const highEffort =
+    hisRecent.slice(-3).filter(effort).length >= 2 ||
+    msg.trim().split(/\s+/).length > 20;
+  const hisInvestment: Signals["hisInvestment"] = lowEffort
+    ? "low"
+    : highEffort
+      ? "high"
+      : "normal";
+
+  // Disclosure depth — turn-taking reciprocity needs to know what he gave.
+  const firstPerson = /\b(i|i'm|im|iam|me|my|mine)\b/i.test(msg);
+  const disclosureDepth: Signals["disclosureDepth"] = expressesEmotion
+    ? "emotional"
+    : firstPerson && words >= 5
+      ? "personal"
+      : words >= 5
+        ? "surface"
+        : "none";
+
+  const topicPivot = TOPIC_PIVOT.test(msg);
+
+  // Overnight pile — he texted during her night hours while she was out,
+  // and it's been long enough that this turn is her picking her phone up.
+  const lastAssistantIdx = ctx.recentMessages.map((m) => m.role).lastIndexOf("assistant");
+  const pile = ctx.recentMessages
+    .slice(lastAssistantIdx + 1)
+    .filter((m) => m.role === "user" && m.created_at);
+  const overnightPile = pile.some((m) => {
+    const h = herNow(new Date(m.created_at!)).hour;
+    const nightHour = h >= 22 || h < 9;
+    const aged = now - new Date(m.created_at!).getTime() > 2 * 3_600_000;
+    return nightHour && aged;
+  });
+
   const mentionsNewTopic =
     ctx.state.current_topic != null &&
     msg.length > 20 &&
@@ -156,6 +271,11 @@ export function computeSignals(ctx: TurnContext): Signals {
     asksAboutHer,
     emotionalCharge: expressesEmotion || ctx.state.recent_emotion != null,
     hoursSinceLast,
+    topicInterest,
+    hisInvestment,
+    disclosureDepth,
+    topicPivot,
+    overnightPile,
   };
 }
 
@@ -200,6 +320,26 @@ export function buildDirectives(ctx: TurnContext, s: Signals): Directive[] {
       text: "They just told you you're asking a lot. Own it lightly ('lol fair, okay no more questions') and do NOT ask anything this turn.",
       hard: true,
       noQuestion: true,
+    });
+  }
+
+  // ── She was out — messages piled up overnight ───────────────────────────
+  if (s.overnightPile) {
+    d.push({
+      rule: "woke_up",
+      reason: "messages arrived while she was out/asleep",
+      text: "Messages came in while you were out. Open like a person picking up their phone — 'wait I crashed so early 😭 okay reading these' energy — react to what they actually said, then continue. Don't pretend the gap didn't happen.",
+      hard: true,
+    });
+  }
+
+  // ── Explicit topic change ───────────────────────────────────────────────
+  if (s.topicPivot) {
+    d.push({
+      rule: "topic_pivot",
+      reason: "user asked to change the topic",
+      text: "They want off this topic — do NOT return to it for the rest of this conversation. Bring a genuinely different lane: something from YOUR life, a curiosity about them, an observation. Never a rerun of a bit already used in this conversation.",
+      hard: true,
     });
   }
 
@@ -252,7 +392,37 @@ export function buildDirectives(ctx: TurnContext, s: Signals): Directive[] {
     d.push({
       rule: "open_loop",
       reason: `active loop: "${s.dueOpenLoop.description}"`,
-      text: `If it fits naturally, you may follow up on an open thread: "${s.dueOpenLoop.description}". Don't force it.`,
+      text: `If it fits naturally, you may follow up on an open thread: "${s.dueOpenLoop.description}". Don't force it — and if they already answered it, the thread is dead, don't resurrect it.`,
+    });
+  }
+
+  // ── Selective interest — she doesn't mine topics that bore her ──────────
+  if (s.topicInterest === "low" && !s.asksAboutHer && !s.topicPivot) {
+    d.push({
+      rule: "low_interest",
+      reason: "topic outside her interest zone",
+      text: "This isn't really her territory — give a real take or a light tease, don't dig into it. Letting a dry topic slide is what a person does; interviewing him on it is what a bot does.",
+    });
+  }
+
+  // ── Investment mirroring — her effort tracks his ────────────────────────
+  if (s.hisInvestment === "low" && !s.userPushesBack) {
+    d.push({
+      rule: "low_effort",
+      reason: "sustained one-word user messages",
+      text: "He's been giving one-word energy for a while — match it instead of carrying the conversation. Short, dry, or a tease about it ('you're very one-word tonight'). Never more invested than he is.",
+    });
+  }
+
+  // ── Depth matching — real disclosure earns reciprocity ─────────────────
+  if (
+    (s.disclosureDepth === "personal" || s.disclosureDepth === "emotional") &&
+    !s.asksAboutHer
+  ) {
+    d.push({
+      rule: "match_depth",
+      reason: `user disclosure depth = ${s.disclosureDepth}`,
+      text: "He shared something real — reciprocate before interrogating: react, then give something real of yours (stage-appropriate). A follow-up on HIS point beats a new question.",
     });
   }
 

@@ -11,7 +11,9 @@ import {
 import { extractAndStore } from "@/lib/memory/extract";
 import { HeuristicRetriever } from "@/lib/memory/retrieve";
 import { effectiveStatus } from "@/lib/persona/life";
+import { herPresence } from "@/lib/persona/presence";
 import { stageForFamiliarity, type DisclosureTier } from "@/lib/persona/profile";
+import { herNow } from "@/lib/time";
 import {
   applyStateUpdate,
   computeFamiliarity,
@@ -45,11 +47,42 @@ import { responseSchema } from "./schemas";
 export interface OrchestrateResult {
   bubbles: string[];
   assistantMessages: MessageRow[];
-  plan: AssistantResponse["plan"];
-  intention: ReturnType<typeof composeIntention>;
+  plan: AssistantResponse["plan"] | null;
+  intention: ReturnType<typeof composeIntention> | null;
   directives: string[];
+  /** She's out (asleep/gone) — message was stored, nothing was generated. */
+  asleep: boolean;
+  /** Simulated reply latency for the client's typing indicator. */
+  replyDelayMs: number;
   /** Async memory extraction — await via after() so it never blocks the reply. */
   extraction: Promise<unknown>;
+}
+
+const GOODNIGHT = /\b(night|good ?night|sleep|bed|crash|gn\b|natt|😴|💤)\b/i;
+
+/** She said goodnight within the last ~8h — that's binding, not a hint. */
+function saidGoodnightRecently(recent: MessageRow[], now: Date = new Date()): boolean {
+  const last = [...recent].reverse().find((m) => m.role === "assistant");
+  if (!last) return false;
+  const ageH = (now.getTime() - new Date(last.created_at).getTime()) / 3_600_000;
+  return ageH < 8 && GOODNIGHT.test(last.content);
+}
+
+/**
+ * Simulated reply latency — a person doesn't answer in 300ms forever.
+ * Base jitter + typing time + late-hour penalty + loose mirroring of his pace.
+ */
+function replyDelayMs(opts: {
+  bubbles: string[];
+  fading: boolean;
+  lastUserGapMs: number;
+}): number {
+  const base = 800 + Math.random() * 1800;
+  const typing = Math.min(opts.bubbles.join("").length * 18, 4000);
+  const late = opts.fading ? 1200 : 0;
+  const mirror =
+    opts.lastUserGapMs > 5 * 60_000 ? Math.min(opts.lastUserGapMs / 20, 8000) : 0;
+  return Math.min(base + typing + late + mirror, 20_000);
 }
 
 export async function orchestrate(opts: {
@@ -57,8 +90,11 @@ export async function orchestrate(opts: {
   model: ChatModel;
   userId: string;
   userMessage: string;
+  /** testability seam — presence/day-vibe compute against this clock */
+  now?: Date;
 }): Promise<OrchestrateResult> {
   const { supabase, model, userId, userMessage } = opts;
+  const now = opts.now ?? new Date();
 
   // ── 1. Load context ───────────────────────────────────────────────────────
   const conversation = await getOrCreateConversation(supabase, userId);
@@ -75,6 +111,55 @@ export async function orchestrate(opts: {
     (t) => effectiveStatus(t) !== "resolved"
   );
 
+  // ── 1b. Presence — she is not always on ───────────────────────────────────
+  const lastUserMsg = [...recent].reverse().find((m) => m.role === "user");
+  const convoActive =
+    lastUserMsg != null &&
+    now.getTime() - new Date(lastUserMsg.created_at).getTime() < 20 * 60_000;
+  const presence = herPresence({
+    userId,
+    hasHistory: recent.length > 0,
+    saidGoodnight: saidGoodnightRecently(recent, now),
+    convoActive,
+    now,
+  });
+
+  if (presence.state === "out") {
+    // She's asleep/gone — the message lands, she'll see it later.
+    // Still extract: whatever he said at 2am informs tomorrow's reply.
+    await insertMessage(supabase, {
+      conversation_id: conversation.id,
+      role: "user",
+      content: userMessage,
+    });
+    await supabase
+      .from("conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conversation.id);
+    const extraction = extractAndStore({
+      model,
+      supabase,
+      userId,
+      conversationId: conversation.id,
+      exchange: [
+        ...recent.slice(-4).map((m) => ({ role: m.role, content: m.content })),
+        { role: "user" as const, content: userMessage },
+      ],
+      existingMemories: allMemories,
+      existingLoops: openLoops,
+    }).catch((e) => console.error("[extract] failed:", e));
+    return {
+      bubbles: [],
+      assistantMessages: [],
+      plan: null,
+      intention: null,
+      directives: ["presence: out"],
+      asleep: true,
+      replyDelayMs: 0,
+      extraction,
+    };
+  }
+
   // ── 2. Memory retrieval ───────────────────────────────────────────────────
   const recentEntities = extractRecentEntities(recent);
   const retriever = new HeuristicRetriever();
@@ -87,13 +172,24 @@ export async function orchestrate(opts: {
   // ── 3. Rules → directives ─────────────────────────────────────────────────
   const ctx: TurnContext = {
     userMessage,
-    recentMessages: recent.map((m) => ({ role: m.role, content: m.content })),
+    recentMessages: recent.map((m) => ({
+      role: m.role,
+      content: m.content,
+      created_at: m.created_at,
+    })),
     memories: retrieved.map((r) => r.memory),
     openLoops,
     state,
   };
   const signals = computeSignals(ctx);
   const directives = buildDirectives(ctx, signals);
+  if (presence.promptLine) {
+    directives.push({
+      rule: "presence",
+      reason: `presence=${presence.state}`,
+      text: presence.promptLine,
+    });
+  }
   const intention = composeIntention(ctx, signals, directives);
 
   // ── 4. Build prompt + generate ────────────────────────────────────────────
@@ -107,6 +203,7 @@ export async function orchestrate(opts: {
     directives,
     intention,
     isFirstConversation: recent.length === 0,
+    dayVibe: presence.vibe,
   });
 
   const messages: ChatMessage[] = [
@@ -142,10 +239,13 @@ export async function orchestrate(opts: {
   }
 
   // Length sanity: deterministic bubble cap per target length — kills the
-  // "restate the same beat in three bubbles" failure mode.
-  const bubbleCap = { one_liner: 1, short: 1, medium: 2, long: 4 }[
+  // "restate the same beat in three bubbles" failure mode. Form reshapes the
+  // cap: bursts get room, singles collapse to one bubble.
+  let bubbleCap = { one_liner: 1, short: 1, medium: 2, long: 4 }[
     intention.targetLength
   ];
+  if (intention.form === "burst") bubbleCap = Math.min(bubbleCap + 2, 4);
+  if (intention.form === "single") bubbleCap = Math.min(bubbleCap, 1);
   if (intention.targetLength === "one_liner") {
     const shortest = [...out.bubbles].sort((a, b) => a.length - b.length)[0];
     out.bubbles = [shortest];
@@ -199,9 +299,18 @@ export async function orchestrate(opts: {
         ? "problem_introduced"
         : state.current_beat;
 
+  // A new Stockholm day resets her mood baseline to today's vibe — she's not
+  // the same person every morning. Within the day, momentum decays toward it.
+  const isNewStockholmDay =
+    !state.last_interaction_at ||
+    herNow(new Date(state.last_interaction_at)).date !== herNow(now).date;
+
   const patch: Partial<ConversationStateRow> = {
     // model-proposed register, pulled slightly toward baseline (momentum)
     ...(out.state_update ?? {}),
+    her_mood:
+      out.state_update?.her_mood ??
+      (isNewStockholmDay ? presence.vibe.mood : state.her_mood),
     consecutive_ai_questions: asked ? state.consecutive_ai_questions + 1 : 0,
     act_histogram: pushActs(state.act_histogram, intention.acts),
     familiarity: fam.familiarity,
@@ -215,8 +324,9 @@ export async function orchestrate(opts: {
       nextBeat !== state.current_beat ? new Date().toISOString() : state.beat_started_at,
     last_interaction_at: new Date().toISOString(),
     her_energy: decayed(
-      out.state_update?.her_energy ?? state.her_energy,
-      CONFIG.mood.baseline.energy
+      out.state_update?.her_energy ??
+        (isNewStockholmDay ? presence.vibe.energy : state.her_energy),
+      presence.vibe.energy
     ),
     warmth: decayed(
       signals.isRude ? Math.max(0, state.warmth - CONFIG.familiarity.rudenessWarmthPenalty) : (out.state_update?.warmth ?? state.warmth),
@@ -266,12 +376,26 @@ export async function orchestrate(opts: {
     existingLoops: openLoops,
   }).catch((e) => console.error("[extract] failed:", e));
 
+  // How long he took to send this message — loosely mirrors his pace.
+  const lastAssistant = [...recent].reverse().find((m) => m.role === "assistant");
+  const hisGapMs =
+    lastAssistant && lastUserMsg
+      ? new Date(lastUserMsg.created_at).getTime() -
+        new Date(lastAssistant.created_at).getTime()
+      : 0;
+
   return {
     bubbles: out.bubbles,
     assistantMessages,
     plan: out.plan,
     intention,
     directives: directives.map((d) => `${d.rule}: ${d.reason}`),
+    asleep: false,
+    replyDelayMs: replyDelayMs({
+      bubbles: out.bubbles,
+      fading: presence.state === "fading",
+      lastUserGapMs: Math.max(0, hisGapMs),
+    }),
     extraction,
   };
 }

@@ -51,6 +51,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       bubbles: result.bubbles,
       messageIds: result.assistantMessages.map((m) => m.id),
+      asleep: result.asleep,
+      replyDelayMs: result.replyDelayMs,
     });
   } catch (err) {
     console.error("[/api/chat] orchestration failed:", err);

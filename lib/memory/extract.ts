@@ -25,7 +25,7 @@ MEMORY RULES — be selective, not exhaustive:
 
 OPEN LOOPS — things with an unresolved future:
 - create: interview Friday, waiting on a reply, "I'm thinking about quitting", a plan she should ask about later.
-- resolve/cancel/stale when the loop closes or dies.
+- resolve/cancel/stale when the loop closes or dies. IMPORTANT: if the user's latest message ANSWERED what a loop was waiting on — he said "will subcontract it" while a loop waits on his decision — emit {"action":"resolve","id":"..."} for that loop. Lingering answered loops make her re-ask dead questions, which reads as not listening.
 - importance + emotional_weight: "buy milk" ≈ 2/2; "waiting to hear if Sarah likes me" ≈ 7/9.
 
 CONVERSATION SUMMARY — 1-3 sentences on what is happening RIGHT NOW (topic, user's state, where it's heading). This is separate from memories: summary = current situation, memory = durable facts.
@@ -42,6 +42,9 @@ Exchange — user: "I'm thinking about quitting my job" | assistant: "wait what.
 
 Exchange — user: "lol ok" | assistant: "😂"
 → new_memories: [], open_loop_updates: [] (nothing worth storing — that's fine)
+
+Exchange — active loops: [l9] "waiting to hear whether he subcontracted the inside work" | user: "foundations are done, we're subcontracting the inside" | assistant: "the worst part's over then"
+→ open_loop_updates: [{"action":"resolve","id":"l9"}] (he answered — the thread is closed)
 
 When in doubt between storing and not storing a MEANINGFUL item (event, relationship, goal, worry, plan), store it. Selectivity is about trivialities, not about real life.`;
 

@@ -144,6 +144,12 @@ export interface Intention {
   acts: Act[]; // ordered composition, e.g. ["react","share","ask"]
   openness: Openness;
   targetLength: "one_liner" | "short" | "medium" | "long";
+  /**
+   * Reply shape — de-templates the turn so "react|opinion|question" isn't
+   * every reply. burst = several rapid micro-bubbles (invested/excited);
+   * single = one bubble (dry/cool); ramble = one real thought out loud.
+   */
+  form: "burst" | "single" | "ramble";
 }
 
 export interface ResponsePlan {

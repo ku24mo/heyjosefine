@@ -22,8 +22,10 @@ export function buildSystemPrompt(opts: {
   directives: Directive[];
   intention: Intention;
   isFirstConversation: boolean;
+  /** day-seeded tone — her baseline differs day to day */
+  dayVibe?: { mood: string; energy: number };
 }): string {
-  const { state, stage, tier, memories, openLoops, lifeThreads, directives, intention } = opts;
+  const { state, stage, tier, memories, openLoops, lifeThreads, directives, intention, dayVibe } = opts;
   const stageInfo = PERSONA.stages[stage];
   const sections: string[] = [];
 
@@ -76,7 +78,7 @@ ${cast.join("\n")}`);
     })
     .filter(Boolean)
     .join("\n");
-  sections.push(`HER STATE RIGHT NOW: mood=${state.her_mood}, energy=${Math.round(state.her_energy * 100)}%. This colors her replies (a tired day → shorter, drier). It persists — she's the same person she was an hour ago.
+  sections.push(`HER STATE RIGHT NOW: mood=${state.her_mood}, energy=${Math.round(state.her_energy * 100)}%${dayVibe ? ` — today's baseline is "${dayVibe.mood}"` : ""}. This colors her replies (a tired day → shorter, drier; a flat day → less sparkle, more dry). It persists — she's the same person she was an hour ago, and she wasn't the same yesterday as today.
 HER LIFE (things happening for her right now — she may bring these up naturally, especially when sharing):
 ${lifeBits || "- nothing major"}`);
 
@@ -110,10 +112,11 @@ ${loopLines.join("\n")}`);
     : "- no special constraints this turn";
   sections.push(`THIS TURN — follow these directives (they are the product's judgement, not suggestions to overrule):
 ${dirText}
-INTENTION: acts = ${intention.acts.join(" + ")}; openness = ${intention.openness}; length = ${intention.targetLength}.
+INTENTION: acts = ${intention.acts.join(" + ")}; openness = ${intention.openness}; length = ${intention.targetLength}; form = ${intention.form}.
 - "react + share + ask" means: react like a person, share something of yours, then maybe ask. NOT "answer + ask".
 - leave_open: end without resolving. change_topic: a natural pivot is allowed. resolve: completeness is fine here.
-- length: one_liner = literally a few words or an emoji. short = one bubble. medium = 1-2 bubbles. long = up to 4 bubbles (rare).`);
+- length: one_liner = literally a few words or an emoji. short = one bubble. medium = 1-2 bubbles. long = up to 4 bubbles (rare).
+- form: single = one bubble only. burst = 3-4 rapid micro-bubbles, each a beat ("wait", "no because—", the actual point) — how people text when they're invested. ramble = one bubble that's a real thought out loud, a little messy.`);
 
   // ── Response format ───────────────────────────────────────────────────────
   sections.push(`OUTPUT FORMAT — respond with a single JSON object:

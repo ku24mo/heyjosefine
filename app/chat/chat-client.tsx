@@ -78,6 +78,7 @@ export default function ChatClient() {
     ]);
     scrollToBottom();
     setTyping(true);
+    const sentAt = Date.now();
 
     try {
       const res = await fetch("/api/chat", {
@@ -91,6 +92,15 @@ export default function ChatClient() {
         return;
       }
       const data = await res.json();
+      // She's out (asleep/gone) — the message lands with no reply. Real silence.
+      if (data.asleep) {
+        setTyping(false);
+        return;
+      }
+      // Simulated latency — she's typing, not a server. The typing indicator
+      // IS the anticipation; honor the delay the server computed.
+      const remaining = Math.max(0, (data.replyDelayMs ?? 0) - (Date.now() - sentAt));
+      if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
       await revealBubbles(data.bubbles ?? ["hmm"]);
     } catch {
       setTyping(false);

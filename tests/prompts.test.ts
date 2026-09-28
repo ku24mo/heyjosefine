@@ -7,6 +7,7 @@ const intention: Intention = {
   acts: ["react"],
   openness: "leave_open",
   targetLength: "short",
+  form: "single",
 };
 
 function prompt(tier: 1 | 2 | 3) {
