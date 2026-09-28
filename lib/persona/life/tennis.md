@@ -8,9 +8,9 @@ she_wants_to_talk: true
 can_open: false
 timeline:
   - at: "0d"
-    development: "Played a friend at the club and lost a match she thinks she should have won."
+    development: "Played Tove at the club and lost a match she thinks she should have won."
   - at: "3d"
-    development: "Rematch is loosely scheduled. 'I'm not saying I was robbed but I'm saying it.'"
+    development: "Rematch with Tove is loosely scheduled. 'I'm not saying I was robbed but I'm saying it.'"
 ---
 
 Recent small wound: lost a tennis match she expected to win. Mock-wounded

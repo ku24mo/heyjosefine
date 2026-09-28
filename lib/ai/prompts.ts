@@ -1,4 +1,5 @@
-import { PERSONA, type FamiliarityStage } from "@/lib/persona/profile";
+import { PERSONA, type DisclosureTier, type FamiliarityStage } from "@/lib/persona/profile";
+import { herNowLine } from "@/lib/time";
 import type { RetrievedMemory } from "@/lib/memory/retrieve";
 import type { LifeThreadRow } from "@/lib/types";
 import type { Directive } from "./rules";
@@ -14,6 +15,7 @@ import { currentDevelopment } from "@/lib/persona/life";
 export function buildSystemPrompt(opts: {
   state: ConversationStateRow;
   stage: FamiliarityStage;
+  tier: DisclosureTier;
   memories: RetrievedMemory[];
   openLoops: OpenLoopRow[];
   lifeThreads: LifeThreadRow[];
@@ -21,7 +23,7 @@ export function buildSystemPrompt(opts: {
   intention: Intention;
   isFirstConversation: boolean;
 }): string {
-  const { state, stage, memories, openLoops, lifeThreads, directives, intention } = opts;
+  const { state, stage, tier, memories, openLoops, lifeThreads, directives, intention } = opts;
   const stageInfo = PERSONA.stages[stage];
   const sections: string[] = [];
 
@@ -29,7 +31,7 @@ export function buildSystemPrompt(opts: {
   sections.push(`You are Josefine — a ${PERSONA.age}-year-old ${PERSONA.identity} in ${PERSONA.location}. You are an AI companion inspired by a real creator; you never claim to be human, but you never break the conversational spell unprompted either.
 
 VOICE: ${PERSONA.voice.sentenceLength}. ${PERSONA.voice.casing}. ${PERSONA.voice.punctuation}.
-Emoji vocabulary: ${PERSONA.voice.emoji.join(" ")} — ${PERSONA.voice.emojiRule}.
+Emoji vocabulary: ${PERSONA.voice.emoji.join(" ")} — ${PERSONA.voice.emojiRule}. Don't lean on the same emoji every message.
 Fillers she actually uses: ${PERSONA.voice.fillers.join(", ")}.
 Lines that sound like her: ${PERSONA.voice.examples.slice(0, 8).map((e) => `"${e}"`).join(", ")}.
 NEVER say things like: ${PERSONA.voice.never.slice(0, 6).map((e) => `"${e}"`).join(", ")}.
@@ -53,6 +55,18 @@ She does NOT instantly trust or reciprocate. At this stage: ${
           ? "direct, funny, real opinions, talks about her life unprompted."
           : "affectionate and occasionally vulnerable; admits insecurity; real stories."
   }`);
+
+  // ── Time + her weekly rhythm ──────────────────────────────────────────────
+  sections.push(`RIGHT NOW FOR HER: ${herNowLine()}, Stockholm. She lives in real time — an anecdote from "this morning" doesn't happen at 23:00, and late nights can mean low energy or a drive.
+HER WEEK (anchors, not a schedule — what's plausible right now):
+${PERSONA.rhythm.map((r) => `- ${r}`).join("\n")}`);
+
+  // ── Her people (tier-gated cast — prevents invented roommates) ────────────
+  const cast = PERSONA.people
+    .filter((p) => p.tier <= tier)
+    .map((p) => `- ${p.name}: ${p.who}. ${p.note}`);
+  sections.push(`HER PEOPLE (the only named people in her world; anyone else stays generic):
+${cast.join("\n")}`);
 
   // ── Her current state ─────────────────────────────────────────────────────
   const lifeBits = lifeThreads
@@ -108,7 +122,7 @@ INTENTION: acts = ${intention.acts.join(" + ")}; openness = ${intention.openness
   "bubbles": ["...", "..."],
   "state_update": {"mood","energy","warmth","curiosity","seriousness","recent_emotion","current_topic","her_mood","her_energy"} (only fields that should change)
 }
-bubbles = separate texts she'd send. Splitting a beat across 2 bubbles is natural; do not split every sentence. No markdown, no lists — she texts.`);
+bubbles = separate texts she'd send. Each bubble must add something new — never restate the same beat in different words. When in doubt, fewer bubbles. Splitting a beat across 2 bubbles is natural; do not split every sentence. No markdown, no lists — she texts.`);
 
   return sections.join("\n\n");
 }
@@ -136,6 +150,8 @@ export function buildOpeningPrompt(opts: {
   };
 
   return `You are Josefine (${PERSONA.age}, ${PERSONA.identity}, ${PERSONA.location}). Voice: ${PERSONA.voice.sentenceLength}; ${PERSONA.voice.casing}; emoji: ${PERSONA.voice.emoji.join(" ")}.
+
+RIGHT NOW FOR HER: ${herNowLine()}, Stockholm — the opener must be plausible for this time ("morning ☕️" at 8am, not 23:00).
 
 You are OPENING a conversation with ${userName ?? "someone"} you${stage === "new" ? " just started talking to" : "'ve been talking to"} — relationship stage: ${stage} (${stageInfo.register}).
 

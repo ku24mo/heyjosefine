@@ -12,6 +12,7 @@ import { dedupeNewMemories } from "./dedupe";
 const EXTRACT_PROMPT = `You are the memory system for an AI companion. Analyze the latest exchange and output structured JSON.
 
 MEMORY RULES — be selective, not exhaustive:
+- OWNERSHIP: memories describe the USER only — the user's life, people, and world. The assistant has her own life (her dog Odin, her law school, her friends, her family). NEVER store something the ASSISTANT said about herself as a user memory. "assistant: my dog Odin stole a sock" → store nothing about a dog.
 - Store only what's worth knowing later: personal facts, goals, relationships, real preferences, emotional situations, concrete events.
 - NEVER store trivialities ("user was tired", "user said lol", "it's raining").
 - Importance 1-10: 8-10 = life-changing/core identity; 5-7 = meaningful; 4 = borderline keep; below 4 = don't store.

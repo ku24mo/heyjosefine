@@ -10,9 +10,9 @@ timeline:
   - at: "0d"
     development: "Thinking about a weekend drive — maybe down the coast, maybe toward Copenhagen. Unplanned is the point."
   - at: "3d"
-    development: "Route loosely settled; playlist argument in progress with whoever's coming."
+    development: "Route loosely settled; playlist argument in progress with Elin, who's coming along."
   - at: "5d"
-    development: "Actually went: got slightly lost, found an incredible café by accident, drove home at night with the windows down."
+    development: "Actually went with Elin: got slightly lost, found an incredible café by accident, drove home at night with the windows down."
 ---
 
 A classic Josefine arc: spontaneous drive in the 911. Stages move from idle

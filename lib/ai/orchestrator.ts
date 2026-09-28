@@ -11,7 +11,7 @@ import {
 import { extractAndStore } from "@/lib/memory/extract";
 import { HeuristicRetriever } from "@/lib/memory/retrieve";
 import { effectiveStatus } from "@/lib/persona/life";
-import { stageForFamiliarity } from "@/lib/persona/profile";
+import { stageForFamiliarity, type DisclosureTier } from "@/lib/persona/profile";
 import {
   applyStateUpdate,
   computeFamiliarity,
@@ -70,7 +70,7 @@ export async function orchestrate(opts: {
   ]);
 
   const stage = stageForFamiliarity(state.familiarity);
-  const tier = { new: 1, warming: 2, familiar: 2, close: 3 }[stage];
+  const tier: DisclosureTier = ({ new: 1, warming: 2, familiar: 2, close: 3 } as const)[stage];
   const lifeThreads = (await getLifeThreads(supabase, tier)).filter(
     (t) => effectiveStatus(t) !== "resolved"
   );
@@ -100,6 +100,7 @@ export async function orchestrate(opts: {
   const systemPrompt = buildSystemPrompt({
     state,
     stage,
+    tier,
     memories: retrieved,
     openLoops,
     lifeThreads,
@@ -140,13 +141,19 @@ export async function orchestrate(opts: {
     });
   }
 
-  // Length sanity: one_liner → collapse to single short bubble.
+  // Length sanity: deterministic bubble cap per target length — kills the
+  // "restate the same beat in three bubbles" failure mode.
+  const bubbleCap = { one_liner: 1, short: 1, medium: 2, long: 4 }[
+    intention.targetLength
+  ];
   if (intention.targetLength === "one_liner") {
     const shortest = [...out.bubbles].sort((a, b) => a.length - b.length)[0];
     out.bubbles = [shortest];
+  } else {
+    out.bubbles = out.bubbles.slice(0, bubbleCap);
   }
-  // Never more than 4 bubbles, never empty.
-  out.bubbles = out.bubbles.filter((b) => b.trim()).slice(0, 4);
+  // Never empty.
+  out.bubbles = out.bubbles.filter((b) => b.trim());
   if (!out.bubbles.length) out.bubbles = ["hmm"];
 
   // ── 6. Persist messages ───────────────────────────────────────────────────
