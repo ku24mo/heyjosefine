@@ -11,6 +11,8 @@ interface Bubble {
   tapback?: string | null;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 type Presence = "here" | "away";
 type Receipt = "delivered" | "read";
 
@@ -23,8 +25,11 @@ export default function ChatClient() {
   const [paywall, setPaywall] = useState(false);
   const [loading, setLoading] = useState(true);
   const [presence, setPresence] = useState<Presence | null>(null);
+  /** "Read" stamp on his last bubble once she picks it up (typing starts). */
+  const [pendingReadAt, setPendingReadAt] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
+  const sendingRef = useRef(false);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() =>
@@ -63,9 +68,7 @@ export default function ChatClient() {
     (bubbles: string[]) => {
       pendingRef.current = pendingRef.current.then(async () => {
         for (const [i, content] of bubbles.entries()) {
-          await new Promise((r) =>
-            setTimeout(r, i === 0 ? REVEAL_MS : REVEAL_MS + Math.min(content.length * 8, 1500))
-          );
+          await sleep(i === 0 ? REVEAL_MS : REVEAL_MS + Math.min(content.length * 8, 1500));
           setTyping(i < bubbles.length - 1);
           setMessages((m) => [
             ...m,
@@ -111,14 +114,15 @@ export default function ChatClient() {
   async function send(e: FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || typing) return;
+    if (!text || sendingRef.current) return;
+    sendingRef.current = true;
     setInput("");
+    setPendingReadAt(null);
     setMessages((m) => [
       ...m,
       { id: `user-${Date.now()}`, role: "user", content: text, created_at: new Date().toISOString() },
     ]);
     scrollToBottom();
-    setTyping(true);
     sendSound();
     const sentAt = Date.now();
 
@@ -129,7 +133,6 @@ export default function ChatClient() {
         body: JSON.stringify({ message: text }),
       });
       if (res.status === 402) {
-        setTyping(false);
         setPaywall(true);
         return;
       }
@@ -144,13 +147,21 @@ export default function ChatClient() {
           return m.map((b, i) => (i === at ? { ...b, tapback: data.tapback.emoji } : b));
         });
       }
-      // Simulated latency — she's typing, not a server.
-      const remaining = Math.max(0, (data.replyDelayMs ?? 0) - (Date.now() - sentAt));
-      if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
-      await revealBubbles(data.bubbles ?? ["hmm"]);
+      // Simulated latency — Delivered sits first; Read + typing dots only in
+      // the last stretch, like she picked it up and started replying.
+      const bubbles: string[] = data.bubbles ?? ["hmm"];
+      const delayLeft = Math.max(0, (data.replyDelayMs ?? 0) - (Date.now() - sentAt));
+      const typingLeadMs = Math.min(1200 + bubbles.length * 500, 3000);
+      await sleep(Math.max(0, delayLeft - typingLeadMs));
+      setTyping(true);
+      setPendingReadAt(new Date().toISOString());
+      await sleep(Math.min(typingLeadMs, delayLeft));
+      await revealBubbles(bubbles);
     } catch {
       setTyping(false);
       await revealBubbles(["my brain just froze 😅 say that again?"]);
+    } finally {
+      sendingRef.current = false;
     }
   }
 
@@ -203,7 +214,7 @@ export default function ChatClient() {
             say hi — she&rsquo;s curious who you are
           </div>
         ) : (
-          <MessageList messages={messages} />
+          <MessageList messages={messages} pendingReadAt={pendingReadAt} />
         )}
         {typing && <TypingDots />}
         {paywall && (
@@ -247,7 +258,7 @@ export default function ChatClient() {
 const HOUR_MS = 3_600_000;
 const GAP_MS = 60 * 60_000; // timestamp separator after an hour of silence
 
-function MessageList({ messages }: { messages: Bubble[] }) {
+function MessageList({ messages, pendingReadAt }: { messages: Bubble[]; pendingReadAt: string | null }) {
   // iOS groups consecutive same-sender bubbles; tail goes on the last one.
   const groups: { role: Bubble["role"]; items: Bubble[] }[] = [];
   for (const m of messages) {
@@ -297,7 +308,9 @@ function MessageList({ messages }: { messages: Bubble[] }) {
               })}
               {isLastUserGroup && (
                 <div className="mt-1 px-1 text-right text-[10px] text-neutral-400">
-                  {readAt ? `Read ${formatClock(readAt)}` : "Delivered"}
+                  {readAt ?? pendingReadAt
+                    ? `Read ${formatClock(readAt ?? pendingReadAt!)}`
+                    : "Delivered"}
                 </div>
               )}
             </div>
