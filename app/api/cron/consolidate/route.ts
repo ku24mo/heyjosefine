@@ -155,5 +155,35 @@ export async function GET(request: Request) {
     results.push({ userId, merged, archived: archiveIds.size });
   }
 
-  return NextResponse.json({ users: results.length, results });
+  // ── stale guest sweep ──────────────────────────────────────────────────────
+  // Anonymous users who never claimed leave dead auth.users rows + cascaded
+  // data. Guests idle >30 days are gone for good — their session cookie is the
+  // only thing that ever identified them anyway.
+  let guestsDeleted = 0;
+  const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const { data: authPage } = await supabase.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  const staleGuests = (authPage?.users ?? []).filter(
+    (u) => u.is_anonymous && u.created_at < cutoff
+  );
+  for (const u of staleGuests) {
+    const { data: st } = await supabase
+      .from("conversation_state")
+      .select("last_interaction_at")
+      .eq("user_id", u.id)
+      .maybeSingle();
+    if (!st || !st.last_interaction_at || st.last_interaction_at < cutoff) {
+      const { error } = await supabase.auth.admin.deleteUser(u.id);
+      if (!error) guestsDeleted++;
+      else console.error(`[consolidate] guest delete failed ${u.id}:`, error);
+    }
+  }
+
+  return NextResponse.json({
+    users: results.length,
+    results,
+    guestsDeleted,
+  });
 }

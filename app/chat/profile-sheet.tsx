@@ -12,6 +12,8 @@ export default function ProfileSheet(props: {
   onClose: () => void;
   statusLine: string;
   plan: "free" | "unlimited";
+  anonymous: boolean;
+  onClaim: () => void;
   onDeleted: () => void;
 }) {
   // Remounts each time it opens — no reset-on-open effect needed.
@@ -23,16 +25,21 @@ function SheetInner({
   onClose,
   statusLine,
   plan,
+  anonymous,
+  onClaim,
   onDeleted,
 }: {
   onClose: () => void;
   statusLine: string;
   plan: "free" | "unlimited";
+  anonymous: boolean;
+  onClaim: () => void;
   onDeleted: () => void;
 }) {
   const router = useRouter();
   const [sound, setSound] = useState(() => soundEnabled());
   const [confirming, setConfirming] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function deleteConversation() {
@@ -51,6 +58,19 @@ function SheetInner({
   async function signOut() {
     await getBrowserSupabase().auth.signOut();
     router.replace("/auth");
+  }
+
+  async function deleteAccount() {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      setTimeout(() => setConfirmingDelete(false), 4000);
+      return;
+    }
+    setBusy(true);
+    await fetch("/api/account/delete", { method: "POST" });
+    // Server deleted the auth user — the local session is dead; bounce home
+    // (client bootstrap will mint a fresh guest session).
+    window.location.href = "/";
   }
 
   return (
@@ -73,7 +93,23 @@ function SheetInner({
 
         {/* premium */}
         <div className="px-4">
-          {plan === "unlimited" ? (
+          {anonymous ? (
+            <button
+              onClick={onClaim}
+              className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
+                ★
+              </span>
+              <span className="flex-1">
+                <span className="block text-[15px] font-medium">Claim your account</span>
+                <span className="block text-[12px] text-neutral-500">
+                  keep this conversation — email + password
+                </span>
+              </span>
+              <span className="text-neutral-300">›</span>
+            </button>
+          ) : plan === "unlimited" ? (
             <button
               onClick={async () => {
                 const res = await fetch("/api/billing-portal", { method: "POST" });
@@ -144,11 +180,29 @@ function SheetInner({
               : "Delete Conversation"}
           </button>
           <button
-            onClick={signOut}
-            className="w-full rounded-b-xl bg-white px-4 py-3.5 text-left text-[15px] text-[#ff3b30] active:bg-neutral-100"
+            onClick={deleteAccount}
+            disabled={busy}
+            className="w-full bg-white px-4 py-3.5 text-left text-[15px] text-[#ff3b30] active:bg-neutral-100 disabled:opacity-50"
           >
-            Sign Out
+            {confirmingDelete
+              ? "Tap again — account and everything she knows, gone"
+              : "Delete Account"}
           </button>
+          {anonymous ? (
+            <button
+              onClick={onClaim}
+              className="w-full rounded-b-xl bg-white px-4 py-3.5 text-left text-[15px] text-[#0a84ff] active:bg-neutral-100"
+            >
+              Claim Account — sign out would lose this thread
+            </button>
+          ) : (
+            <button
+              onClick={signOut}
+              className="w-full rounded-b-xl bg-white px-4 py-3.5 text-left text-[15px] text-[#ff3b30] active:bg-neutral-100"
+            >
+              Sign Out
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -1,28 +1,82 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, type FormEvent } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
 export default function AuthPage() {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  return (
+    <Suspense>
+      <AuthInner />
+    </Suspense>
+  );
+}
 
-  async function signInWithEmail(e: FormEvent) {
+/** Internal-only redirect target — reject absolute/protocol-relative URLs. */
+function safeNext(raw: string | null): string {
+  return raw?.startsWith("/") && !raw.startsWith("//") ? raw : "/";
+}
+
+function friendly(msg: string): string {
+  if (/invalid login credentials/i.test(msg)) return "wrong email or password";
+  if (/already registered|already exists/i.test(msg))
+    return "that email already has an account — log in instead";
+  if (/rate limit|too many/i.test(msg)) return "wait a minute and try again";
+  return msg;
+}
+
+function AuthInner() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const next = safeNext(params.get("next"));
+  const linkError = params.get("error");
+
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(
+    linkError === "link_expired" ? "that link expired — try again" : null
+  );
+  const [notice, setNotice] = useState<string | null>(null);
+
+  function done() {
+    // Hard refresh so the server components/routes see the fresh cookies.
+    router.push(next);
+    router.refresh();
+  }
+
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error } = await getBrowserSupabase().auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${location.origin}/auth/callback` },
-    });
+    setNotice(null);
+    const sb = getBrowserSupabase();
+
+    if (mode === "forgot") {
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: `${location.origin}/auth/callback?next=/auth/reset`,
+      });
+      setLoading(false);
+      if (error) setError(friendly(error.message));
+      else setNotice("check your email — reset link sent");
+      return;
+    }
+
+    const { error } =
+      mode === "signup"
+        ? await sb.auth.signUp({ email, password })
+        : await sb.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) setError(error.message);
-    else setSent(true);
+    if (error) {
+      setError(friendly(error.message));
+      if (/already registered|already exists/i.test(error.message)) setMode("login");
+      return;
+    }
+    done();
   }
-
-
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-neutral-950 px-6 text-neutral-100">
@@ -37,36 +91,103 @@ export default function AuthPage() {
           </p>
         </div>
 
-        {sent ? (
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-center text-sm text-neutral-300">
-            Check your email — we sent you a magic link.
-          </div>
-        ) : (
-          <>
-            <form onSubmit={signInWithEmail} className="space-y-3">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@email.com"
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm outline-none placeholder:text-neutral-500 focus:border-neutral-600"
-              />
+        {mode !== "forgot" && (
+          <div className="mb-4 grid grid-cols-2 rounded-xl bg-neutral-900 p-1 text-sm">
+            {(["login", "signup"] as const).map((m) => (
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm font-medium text-neutral-950 transition hover:bg-white disabled:opacity-50"
+                key={m}
+                type="button"
+                onClick={() => {
+                  setMode(m);
+                  setError(null);
+                  setNotice(null);
+                }}
+                className={`rounded-lg py-2 transition ${mode === m ? "bg-neutral-100 text-neutral-950 font-medium" : "text-neutral-400"}`}
               >
-                {loading ? "Sending…" : "Continue with email"}
+                {m === "login" ? "Log in" : "Sign up"}
               </button>
-            </form>
-            {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
-          </>
+            ))}
+          </div>
         )}
 
+        <form onSubmit={submit} className="space-y-3">
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@email.com"
+            autoComplete="email"
+            className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm outline-none placeholder:text-neutral-500 focus:border-neutral-600"
+          />
+          {mode !== "forgot" && (
+            <div className="relative">
+              <input
+                type={showPw ? "text" : "password"}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="password (8+ characters)"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 pr-14 text-sm outline-none placeholder:text-neutral-500 focus:border-neutral-600"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((s) => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-neutral-400"
+              >
+                {showPw ? "hide" : "show"}
+              </button>
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm font-medium text-neutral-950 transition hover:bg-white disabled:opacity-50"
+          >
+            {loading
+              ? "…"
+              : mode === "forgot"
+                ? "Send reset link"
+                : mode === "signup"
+                  ? "Create account"
+                  : "Log in"}
+          </button>
+        </form>
+
+        {mode === "login" && (
+          <button
+            type="button"
+            onClick={() => {
+              setMode("forgot");
+              setError(null);
+              setNotice(null);
+            }}
+            className="mt-3 w-full text-center text-xs text-neutral-500 hover:text-neutral-300"
+          >
+            forgot password?
+          </button>
+        )}
+        {mode === "forgot" && (
+          <button
+            type="button"
+            onClick={() => setMode("login")}
+            className="mt-3 w-full text-center text-xs text-neutral-500 hover:text-neutral-300"
+          >
+            back to log in
+          </button>
+        )}
+
+        {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
+        {notice && <p className="mt-3 text-center text-sm text-emerald-400">{notice}</p>}
+
         <p className="mt-8 text-center text-xs leading-relaxed text-neutral-500">
-          Josefine is an AI, not a real person. By continuing you agree this is
-          an AI experience inspired by the creator.
+          <Link href="/" className="text-neutral-400 underline underline-offset-2">
+            keep chatting as a guest
+          </Link>
+          {" · "}Josefine is an AI, not a real person. By continuing you agree
+          this is an AI experience inspired by the creator.
         </p>
       </div>
     </main>

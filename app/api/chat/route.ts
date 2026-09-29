@@ -41,8 +41,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const usage = await gateUsage(supabase, user.id); // atomic count+check
+  const anonymous = user.is_anonymous === true;
+  const usage = await gateUsage(supabase, user.id, { anonymous });
   if (!usage.allowed) {
+    // Guests hit the claim wall, not the paywall — different moment, different ask.
+    if (anonymous)
+      return NextResponse.json({ claim: true, usage }, { status: 403 });
     return NextResponse.json({ paywall: true, usage }, { status: 402 });
   }
 

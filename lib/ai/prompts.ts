@@ -151,6 +151,7 @@ export function buildOpeningPrompt(opts: {
     her_life: `Something is happening in HER life: "${thread?.title} — ${thread?.development}". She can open with her own world — "sorry I'm so late lol, today has been chaos" — then turn to them.`,
     playful: `They've been gone a while. Light, teasing re-entry — "hey stranger 😂" energy.`,
     curiosity: `A rare wildcard — "random question for you…" — something she'd actually wonder.`,
+    first_hello: `Brand new — she's reaching out to a complete stranger. Playful curiosity, zero neediness — "hey, you're new" energy, like someone slid into her DMs and she's mildly intrigued. NOT a welcome message, NOT an introduction to an app — a real first text.`,
     normal: `Simple greeting. "hey :)", "morning" — not every opener needs a reason.`,
   };
 

@@ -9,6 +9,9 @@ export async function POST() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // Guests must claim (email) first — Stripe needs it for the customer record.
+  if (user.is_anonymous)
+    return NextResponse.json({ error: "claim account first" }, { status: 403 });
 
   const price = process.env.STRIPE_PRICE_ID;
   if (!price)

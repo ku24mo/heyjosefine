@@ -29,16 +29,13 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthPage = path.startsWith("/auth");
-  const isApi = path.startsWith("/api");
 
-  if (!user && !isAuthPage && !isApi) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/auth";
-    return NextResponse.redirect(url);
-  }
-  if (user && isAuthPage) {
+  // Anonymous-first: guests ARE authenticated users — they belong in chat,
+  // never bounced to /auth. Only a *claimed* session shouldn't see /auth.
+  if (user && !user.is_anonymous && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

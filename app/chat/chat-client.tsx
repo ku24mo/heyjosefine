@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { receiveSound, sendSound } from "@/lib/sounds";
+import { getBrowserSupabase } from "@/lib/supabase/client";
+import ClaimSheet from "./claim-sheet";
 import ProfileSheet from "./profile-sheet";
 
 interface Bubble {
@@ -37,9 +39,16 @@ export default function ChatClient() {
   const [now, setNow] = useState(() => Date.now());
   const [sheetOpen, setSheetOpen] = useState(false);
   const [plan, setPlan] = useState<"free" | "unlimited">("free");
+  /** Anonymous guest vs claimed account — gates the claim wall + sheet rows. */
+  const [anonymous, setAnonymous] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
+  /** Guest-create or network failure on mount — unrecoverable inline state. */
+  const [guestFailed, setGuestFailed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
   const sendingRef = useRef(false);
+  /** Message that hit the claim wall — resent once the account is claimed. */
+  const blockedTextRef = useRef<string | null>(null);
 
   const scrollToBottom = useCallback((instant = false) => {
     const go = () =>
@@ -133,25 +142,43 @@ export default function ChatClient() {
     }
   }, [revealBubbles, scrollToBottom]);
 
+  // Bootstrap: no session → mint an anonymous guest, then load normally.
+  // Guests reach chat unauthenticated by design — the session is created
+  // lazily here, not in the proxy, so crawlers never mint user rows.
   useEffect(() => {
     void (async () => {
+      const { data } = await getBrowserSupabase().auth.getUser();
+      let user = data.user;
+      if (!user) {
+        const res = await fetch("/api/auth/guest", { method: "POST" }).catch(
+          () => null
+        );
+        if (!res?.ok) {
+          setGuestFailed(true);
+          setLoading(false);
+          return;
+        }
+        ({ data: { user } } = await getBrowserSupabase().auth.getUser());
+      }
+      setAnonymous(user?.is_anonymous === true);
       await loadHistory();
       scrollToBottom(true); // open at the newest message, not the top
       await tryOpening(); // proactive opener — she may have a reason to text first
     })();
-  }, [loadHistory, tryOpening, scrollToBottom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function send(e: FormEvent) {
-    e.preventDefault();
-    const text = input.trim();
+  async function sendText(text: string, echoLocal = true) {
     if (!text || sendingRef.current) return;
     sendingRef.current = true;
     setInput("");
     setPendingReadAt(null);
-    setMessages((m) => [
-      ...m,
-      { id: `user-${Date.now()}`, role: "user", content: text, created_at: new Date().toISOString() },
-    ]);
+    if (echoLocal) {
+      setMessages((m) => [
+        ...m,
+        { id: `user-${Date.now()}`, role: "user", content: text, created_at: new Date().toISOString() },
+      ]);
+    }
     scrollToBottom();
     sendSound();
     const sentAt = Date.now();
@@ -162,6 +189,14 @@ export default function ChatClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
       });
+      if (res.status === 403) {
+        // Guest cap → claim wall. The bubble stays on screen; after a
+        // successful claim we resend the same text (echoLocal=false — it's
+        // already rendered, and the server never persisted it).
+        blockedTextRef.current = text;
+        setClaimOpen(true);
+        return;
+      }
       if (res.status === 402) {
         setPaywall(true);
         return;
@@ -192,6 +227,11 @@ export default function ChatClient() {
     } finally {
       sendingRef.current = false;
     }
+  }
+
+  function send(e: FormEvent) {
+    e.preventDefault();
+    void sendText(input.trim());
   }
 
   // She's "online" while typing or within the linger window after her last
@@ -241,6 +281,10 @@ export default function ChatClient() {
       <div className="flex-1 overflow-y-auto px-3 py-4">
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-neutral-400">…</div>
+        ) : guestFailed ? (
+          <div className="flex h-full items-center justify-center px-8 text-center text-sm text-neutral-400">
+            busy right now — try again in a bit
+          </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center px-8 text-center text-sm text-neutral-400">
             say hi — she&rsquo;s curious who you are
@@ -292,6 +336,11 @@ export default function ChatClient() {
         onClose={() => setSheetOpen(false)}
         statusLine={statusText}
         plan={plan}
+        anonymous={anonymous}
+        onClaim={() => {
+          setSheetOpen(false);
+          setClaimOpen(true);
+        }}
         onDeleted={() => {
           setMessages([]);
           setPendingReadAt(null);
@@ -300,6 +349,17 @@ export default function ChatClient() {
             await loadHistory();
             await tryOpening(); // fresh thread — she may open it
           })();
+        }}
+      />
+
+      <ClaimSheet
+        open={claimOpen}
+        onClaimed={() => {
+          setAnonymous(false);
+          setClaimOpen(false);
+          const text = blockedTextRef.current;
+          blockedTextRef.current = null;
+          if (text) void sendText(text, false); // bubble already on screen
         }}
       />
     </div>

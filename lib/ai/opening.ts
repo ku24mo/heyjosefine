@@ -26,6 +26,7 @@ export type OpeningStrategy =
   | "her_life"
   | "playful"
   | "curiosity"
+  | "first_hello"
   | "normal";
 
 export interface OpeningResult {
@@ -46,9 +47,26 @@ export async function generateOpening(opts: {
     getOrCreateConversation(supabase, userId),
   ]);
 
-  // Never open on first visit — onboarding handles that.
+  // First visit = the product opens itself — a stranger texting him first.
+  // Guests land here on their very first mount; this is the magic moment.
   const recent = await getRecentMessages(supabase, conversation.id, 10);
-  if (!recent.length) return null;
+  if (!recent.length) {
+    const prompt = buildOpeningPrompt({
+      strategy: "first_hello",
+      stage: "new",
+      summary: "",
+    });
+    const out = await model.generateStructured({
+      schema: openingSchema,
+      temperature: 0.9,
+      messages: [{ role: "system", content: prompt }],
+    });
+    return {
+      strategy: "first_hello",
+      reason: "brand new visitor",
+      bubbles: out.bubbles.slice(0, 3),
+    };
+  }
 
   const lastMsg = recent[recent.length - 1];
   const hoursSince =

@@ -14,7 +14,8 @@ export interface UsageStatus {
 
 export async function checkUsage(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  opts: { anonymous?: boolean } = {}
 ): Promise<UsageStatus> {
   const today = new Date().toISOString().slice(0, 10);
   const { data } = await supabase
@@ -26,17 +27,23 @@ export async function checkUsage(
   const usedToday = rows.find((r) => r.date === today)?.message_count ?? 0;
   const usedTotal = rows.reduce((s, r) => s + r.message_count, 0);
 
-  const { freeDailyLimit, freeTotalLimit } = CONFIG.usage;
+  // Guests get a lifetime taste only — no daily allowance.
+  const dailyLimit = opts.anonymous
+    ? CONFIG.usage.guestTotalLimit
+    : CONFIG.usage.freeDailyLimit;
+  const totalLimit = opts.anonymous
+    ? CONFIG.usage.guestTotalLimit
+    : CONFIG.usage.freeTotalLimit;
   const reason =
-    usedTotal >= freeTotalLimit ? "total" : usedToday >= freeDailyLimit ? "daily" : undefined;
+    usedTotal >= totalLimit ? "total" : usedToday >= dailyLimit ? "daily" : undefined;
 
   return {
     allowed: reason === undefined,
     reason,
     usedToday,
     usedTotal,
-    dailyLimit: freeDailyLimit,
-    totalLimit: freeTotalLimit,
+    dailyLimit,
+    totalLimit,
   };
 }
 
@@ -64,24 +71,31 @@ async function isUnlimited(
  */
 export async function gateUsage(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  opts: { anonymous?: boolean } = {}
 ): Promise<UsageStatus> {
-  if (await isUnlimited(supabase, userId)) {
+  const anonymous = opts.anonymous === true;
+  if (!anonymous && (await isUnlimited(supabase, userId))) {
     await incrementUsage(supabase, userId); // analytics, not gating
     const s = await checkUsage(supabase, userId);
     return { ...s, allowed: true, reason: undefined };
   }
   const today = new Date().toISOString().slice(0, 10);
-  const { freeDailyLimit, freeTotalLimit } = CONFIG.usage;
+  const dailyLimit = anonymous
+    ? CONFIG.usage.guestTotalLimit
+    : CONFIG.usage.freeDailyLimit;
+  const totalLimit = anonymous
+    ? CONFIG.usage.guestTotalLimit
+    : CONFIG.usage.freeTotalLimit;
   const { data, error } = await supabase.rpc("usage_gate", {
     p_user_id: userId,
     p_date: today,
-    p_daily: freeDailyLimit,
-    p_total: freeTotalLimit,
+    p_daily: dailyLimit,
+    p_total: totalLimit,
   });
   if (error || !data) {
     // RPC missing (old DB) → fall back to non-atomic check; still enforces.
-    const s = await checkUsage(supabase, userId);
+    const s = await checkUsage(supabase, userId, { anonymous });
     if (s.allowed) await incrementUsage(supabase, userId);
     return s;
   }
@@ -90,8 +104,8 @@ export async function gateUsage(
     reason: data.reason,
     usedToday: data.usedToday,
     usedTotal: data.usedTotal,
-    dailyLimit: freeDailyLimit,
-    totalLimit: freeTotalLimit,
+    dailyLimit,
+    totalLimit,
   };
 }
 

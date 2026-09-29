@@ -50,10 +50,12 @@ export const CONFIG = {
     maxRetries: 2, // transient 429/5xx retries inside the AI SDK
   },
 
-  // Usage limits (free tier) — enough to form the habit, tight enough to convert.
+  // Usage limits — guests get a taste, claimed accounts get the full free tier.
   usage: {
-    freeDailyLimit: 40, // user messages per day
-    freeTotalLimit: 150, // lifetime cap → paywall
+    guestTotalLimit: 30, // anonymous lifetime msgs → claim wall
+    guestCreationsPerDay: 5, // per-IP anon sign-up cap
+    freeDailyLimit: 40, // claimed: user messages per day
+    freeTotalLimit: 150, // claimed lifetime cap → paywall
     burstPerMinute: 10, // rapid-fire cap — protects LLM spend, not the user
   },
 
