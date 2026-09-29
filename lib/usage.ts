@@ -40,6 +40,39 @@ export async function checkUsage(
   };
 }
 
+/**
+ * Atomic check+increment — one DB round-trip under the row lock, so a
+ * double-submit can't slip past the cap. Denied sends still count (they're
+ * attempts), which doubles as abuse protection.
+ */
+export async function gateUsage(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<UsageStatus> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { freeDailyLimit, freeTotalLimit } = CONFIG.usage;
+  const { data, error } = await supabase.rpc("usage_gate", {
+    p_user_id: userId,
+    p_date: today,
+    p_daily: freeDailyLimit,
+    p_total: freeTotalLimit,
+  });
+  if (error || !data) {
+    // RPC missing (old DB) → fall back to non-atomic check; still enforces.
+    const s = await checkUsage(supabase, userId);
+    if (s.allowed) await incrementUsage(supabase, userId);
+    return s;
+  }
+  return {
+    allowed: data.allowed,
+    reason: data.reason,
+    usedToday: data.usedToday,
+    usedTotal: data.usedTotal,
+    dailyLimit: freeDailyLimit,
+    totalLimit: freeTotalLimit,
+  };
+}
+
 export async function incrementUsage(
   supabase: SupabaseClient,
   userId: string

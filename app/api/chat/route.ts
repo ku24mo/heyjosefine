@@ -7,8 +7,13 @@ import {
   insertMessage,
 } from "@/lib/db/queries";
 import { CRISIS_RESPONSE, isCrisisMessage } from "@/lib/safety/crisis";
+import {
+  acquireTurnLock,
+  getOrCreateState,
+  releaseTurnLock,
+} from "@/lib/state/conversation";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { checkUsage, incrementUsage } from "@/lib/usage";
+import { gateUsage } from "@/lib/usage";
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
@@ -24,17 +29,25 @@ export async function POST(request: Request) {
   }
 
   await ensureProfile(supabase, user.id);
-  const usage = await checkUsage(supabase, user.id);
+  await getOrCreateState(supabase, user.id); // the lock row must exist
+
+  const usage = await gateUsage(supabase, user.id); // atomic count+check
   if (!usage.allowed) {
     return NextResponse.json({ paywall: true, usage }, { status: 402 });
   }
 
   // Crisis screen — responds in-voice but with real-world resources,
-  // before the model sees it. Still logged + counted.
+  // before the model sees it. Still logged + counted by the gate.
   if (isCrisisMessage(message)) {
-    await incrementUsage(supabase, user.id);
     return NextResponse.json({ bubbles: CRISIS_RESPONSE, crisis: true });
   }
+
+  // Serialize turns per user — double-texts/tabs/retries queue instead of
+  // racing state + memory writes. Timeout → proceed degraded, never silent.
+  const locked = await acquireTurnLock(supabase, user.id);
+  const release = locked
+    ? () => releaseTurnLock(supabase, user.id)
+    : () => Promise.resolve();
 
   const model = getChatModel();
   try {
@@ -44,9 +57,13 @@ export async function POST(request: Request) {
       userId: user.id,
       userMessage: message,
     });
-    await incrementUsage(supabase, user.id);
+    // The lock rides through async extraction too — memory writes serialize.
     after(async () => {
-      await result.extraction;
+      try {
+        await result.extraction;
+      } finally {
+        await release();
+      }
     });
     return NextResponse.json({
       bubbles: result.bubbles,
@@ -57,6 +74,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error("[/api/chat] orchestration failed:", err);
+    await release(); // orchestrate threw — nothing is holding the lock anymore
     // Persist their message — she "read it and zoned out", so the next turn
     // still has the context even though the reply degraded.
     try {

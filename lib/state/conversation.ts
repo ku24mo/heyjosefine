@@ -35,6 +35,7 @@ export const DEFAULT_STATE = (
   last_depth_date: null,
   first_met_at: new Date().toISOString(),
   last_interaction_at: null,
+  turn_locked_at: null,
 });
 
 export async function getOrCreateState(
@@ -145,5 +146,49 @@ export async function applyStateUpdate(
   await supabase
     .from("conversation_state")
     .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+}
+
+/**
+ * Per-user turn lock — a conditional UPDATE acts as an atomic
+ * compare-and-set over HTTP (PG advisory locks can't span pooled
+ * PostgREST requests). A stale lock expires after TTL so a crashed
+ * turn can't wedge the account; callers wait briefly so rapid
+ * double-texts serialize instead of racing.
+ */
+export async function acquireTurnLock(
+  supabase: SupabaseClient,
+  userId: string,
+  opts: { ttlMs?: number; waitMs?: number } = {}
+): Promise<boolean> {
+  const ttlMs = opts.ttlMs ?? 90_000;
+  const deadline = Date.now() + (opts.waitMs ?? 12_000);
+  for (;;) {
+    const cutoff = new Date(Date.now() - ttlMs).toISOString();
+    const { data, error } = await supabase
+      .from("conversation_state")
+      .update({ turn_locked_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .or(`turn_locked_at.is.null,turn_locked_at.lt.${cutoff}`)
+      .select("user_id");
+    if (error) {
+      // Column missing (migration not applied) — don't stall every turn
+      // retrying an impossible query; proceed unlocked.
+      console.error("[turn-lock] unavailable:", error.message);
+      return false;
+    }
+    if (data?.length) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
+
+export async function releaseTurnLock(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<void> {
+  await supabase
+    .from("conversation_state")
+    .update({ turn_locked_at: null })
     .eq("user_id", userId);
 }

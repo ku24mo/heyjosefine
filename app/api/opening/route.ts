@@ -7,6 +7,11 @@ import {
   insertMessage,
 } from "@/lib/db/queries";
 import { canInitiate } from "@/lib/persona/presence";
+import {
+  acquireTurnLock,
+  getOrCreateState,
+  releaseTurnLock,
+} from "@/lib/state/conversation";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /** Called once when the chat screen mounts — may return a proactive opener. */
@@ -22,25 +27,35 @@ export async function GET() {
   // Dead-night hours — she doesn't start conversations at 3am.
   if (!canInitiate()) return NextResponse.json({ bubbles: [] });
 
-  const model = getChatModel();
-  const opening = await generateOpening({ supabase, model, userId: user.id });
-  if (!opening) return NextResponse.json({ bubbles: [] });
+  await getOrCreateState(supabase, user.id); // lock row must exist
+  // Concurrent mounts/tabs must not double-fire an opener — short wait only;
+  // losing the race just means no opener this mount.
+  const locked = await acquireTurnLock(supabase, user.id, { waitMs: 2_000 });
+  if (!locked) return NextResponse.json({ bubbles: [] });
 
-  const conversation = await getOrCreateConversation(supabase, user.id);
-  for (const [i, content] of opening.bubbles.entries()) {
-    await insertMessage(supabase, {
-      conversation_id: conversation.id,
-      role: "assistant",
-      content,
-      meta: { bubble_index: i, intention: { acts: ["callback"], openness: "leave_open", targetLength: "short", form: "single" } },
+  try {
+    const model = getChatModel();
+    const opening = await generateOpening({ supabase, model, userId: user.id });
+    if (!opening) return NextResponse.json({ bubbles: [] });
+
+    const conversation = await getOrCreateConversation(supabase, user.id);
+    for (const [i, content] of opening.bubbles.entries()) {
+      await insertMessage(supabase, {
+        conversation_id: conversation.id,
+        role: "assistant",
+        content,
+        meta: { bubble_index: i, intention: { acts: ["callback"], openness: "leave_open", targetLength: "short", form: "single" } },
+      });
+    }
+    await supabase
+      .from("conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conversation.id);
+    return NextResponse.json({
+      bubbles: opening.bubbles,
+      strategy: opening.strategy,
     });
+  } finally {
+    await releaseTurnLock(supabase, user.id);
   }
-  await supabase
-    .from("conversations")
-    .update({ last_message_at: new Date().toISOString() })
-    .eq("id", conversation.id);
-  return NextResponse.json({
-    bubbles: opening.bubbles,
-    strategy: opening.strategy,
-  });
 }
