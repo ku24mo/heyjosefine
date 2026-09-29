@@ -7,6 +7,25 @@
 
 let ctx: AudioContext | null = null;
 
+const SOUND_KEY = "jo:sound";
+
+/** Persisted mute flag — default on. */
+export function soundEnabled(): boolean {
+  try {
+    return localStorage.getItem(SOUND_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function setSoundEnabled(on: boolean) {
+  try {
+    localStorage.setItem(SOUND_KEY, on ? "on" : "off");
+  } catch {
+    /* private mode etc — session-only then */
+  }
+}
+
 function ac(): AudioContext | null {
   try {
     ctx ??= new (window.AudioContext ||
@@ -20,6 +39,7 @@ function ac(): AudioContext | null {
 
 /** iOS-esque send whoosh — quick rising sweep, ~140ms. */
 export function sendSound() {
+  if (!soundEnabled()) return;
   const a = ac();
   if (!a) return;
   const t = a.currentTime;
@@ -41,6 +61,7 @@ export function sendSound() {
 
 /** Incoming bubble — soft pop, ~90ms. */
 export function receiveSound() {
+  if (!soundEnabled()) return;
   const a = ac();
   if (!a) return;
   const t = a.currentTime;

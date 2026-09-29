@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { receiveSound, sendSound } from "@/lib/sounds";
+import ProfileSheet from "./profile-sheet";
 
 interface Bubble {
   id: string;
@@ -12,8 +13,6 @@ interface Bubble {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-type Receipt = "delivered" | "read";
 
 const REVEAL_MS = 700;
 /** She stays "online" this long after her last message before drifting to "last seen". */
@@ -34,8 +33,9 @@ export default function ChatClient() {
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
   /** "Read" stamp on his last bubble once she picks it up (typing starts). */
   const [pendingReadAt, setPendingReadAt] = useState<string | null>(null);
-  /** Forces re-render so status labels age on a tick, not just on events. */
-  const [, forceTick] = useState(0);
+  /** `now` state (not render-time Date.now) keeps the status line pure. */
+  const [now, setNow] = useState(() => Date.now());
+  const [sheetOpen, setSheetOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
   const sendingRef = useRef(false);
@@ -60,18 +60,19 @@ export default function ChatClient() {
 
   // Status-label tick — ages "last seen", expires "online" on schedule.
   useEffect(() => {
-    const iv = setInterval(() => forceTick((t) => t + 1), TICK_MS);
+    const iv = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(iv);
   }, []);
 
   // Presence poll — her status changes with her clock, not his clicks.
   useEffect(() => {
-    void refreshPresence();
+    const kick = setTimeout(() => void refreshPresence(), 0);
     const iv = setInterval(refreshPresence, 60_000);
     const onFocus = () => void refreshPresence();
     window.addEventListener("visibilitychange", onFocus);
     window.addEventListener("focus", onFocus);
     return () => {
+      clearTimeout(kick);
       clearInterval(iv);
       window.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener("focus", onFocus);
@@ -105,28 +106,35 @@ export default function ChatClient() {
     [scrollToBottom]
   );
 
-  useEffect(() => {
-    (async () => {
-      const res = await fetch("/api/history");
-      if (res.ok) {
-        const { messages } = await res.json();
-        setMessages(messages);
-        const lastHer = [...messages].reverse().find((m: Bubble) => m.role === "assistant");
-        if (lastHer?.created_at) setLastSeenAt(lastHer.created_at);
+  const loadHistory = useCallback(async () => {
+    const res = await fetch("/api/history");
+    if (res.ok) {
+      const { messages } = await res.json();
+      setMessages(messages);
+      const lastHer = [...messages].reverse().find((m: Bubble) => m.role === "assistant");
+      if (lastHer?.created_at) setLastSeenAt(lastHer.created_at);
+    }
+    setLoading(false);
+  }, []);
+
+  const tryOpening = useCallback(async () => {
+    const open = await fetch("/api/opening");
+    if (open.ok) {
+      const { bubbles } = await open.json();
+      if (bubbles?.length) {
+        setTyping(true);
+        scrollToBottom();
+        await revealBubbles(bubbles);
       }
-      setLoading(false);
-      // Proactive opener — she may have a reason to text first.
-      const open = await fetch("/api/opening");
-      if (open.ok) {
-        const { bubbles } = await open.json();
-        if (bubbles?.length) {
-          setTyping(true);
-          scrollToBottom();
-          await revealBubbles(bubbles);
-        }
-      }
-    })();
+    }
   }, [revealBubbles, scrollToBottom]);
+
+  useEffect(() => {
+    void (async () => {
+      await loadHistory();
+      await tryOpening(); // proactive opener — she may have a reason to text first
+    })();
+  }, [loadHistory, tryOpening]);
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -186,7 +194,12 @@ export default function ChatClient() {
   const online =
     typing ||
     (lastSeenAt != null &&
-      Date.now() - new Date(lastSeenAt).getTime() < ONLINE_LINGER_MS);
+      now - new Date(lastSeenAt).getTime() < ONLINE_LINGER_MS);
+  const statusText = online
+    ? "online"
+    : lastSeenAt
+      ? `last seen ${lastSeenLabel(lastSeenAt, now)}`
+      : "AI companion";
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-white text-black">
@@ -194,35 +207,29 @@ export default function ChatClient() {
           pt clears the status bar / notch (viewportFit: cover);
           the center block is in-flow so the header wraps it — nothing clips. */}
       <header className="flex items-center border-b border-neutral-200 px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <span aria-hidden className="w-9 p-2 text-[#0a84ff]">
-          <svg width="14" height="22" viewBox="0 0 14 22" fill="none">
-            <path d="M13 1L2 11l11 10" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </span>
+        <span aria-hidden className="w-9" />
         <div className="flex flex-1 flex-col items-center">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-rose-300 to-amber-200 text-sm font-semibold text-white">
             J
           </div>
           <div className="mt-0.5 text-[13px] font-semibold leading-tight">Josefine</div>
           <div className="flex items-center gap-1 text-[10px] leading-tight text-neutral-500">
-            {online ? (
-              <>
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#34c759]" />
-                online
-              </>
-            ) : lastSeenAt ? (
-              <>last seen {lastSeenLabel(lastSeenAt)}</>
-            ) : (
-              <>AI companion</>
+            {online && (
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#34c759]" />
             )}
+            {statusText}
           </div>
         </div>
-        <div className="flex w-9 items-center justify-center p-1.5 text-[#0a84ff]">
+        <button
+          aria-label="About Josefine"
+          onClick={() => setSheetOpen(true)}
+          className="flex w-9 items-center justify-center p-1.5 text-[#0a84ff]"
+        >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
             <circle cx="12" cy="12" r="9" />
             <path d="M12 8h.01M12 11v5" strokeLinecap="round" />
           </svg>
-        </div>
+        </button>
       </header>
 
       {/* messages */}
@@ -271,11 +278,25 @@ export default function ChatClient() {
           </svg>
         </button>
       </form>
+
+      <ProfileSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        statusLine={statusText}
+        onDeleted={() => {
+          setMessages([]);
+          setPendingReadAt(null);
+          setLastSeenAt(null);
+          void (async () => {
+            await loadHistory();
+            await tryOpening(); // fresh thread — she may open it
+          })();
+        }}
+      />
     </div>
   );
 }
 
-const HOUR_MS = 3_600_000;
 const GAP_MS = 60 * 60_000; // timestamp separator after an hour of silence
 
 function MessageList({ messages, pendingReadAt }: { messages: Bubble[]; pendingReadAt: string | null }) {
@@ -290,7 +311,6 @@ function MessageList({ messages, pendingReadAt }: { messages: Bubble[]; pendingR
   // Receipt state for the most recent user bubble: Read once her reply
   // follows it, Delivered while it's the last word of the conversation.
   const lastUserGroupIdx = groups.map((g) => g.role).lastIndexOf("user");
-  const lastUserGroup = lastUserGroupIdx >= 0 ? groups[lastUserGroupIdx] : null;
   const hasLaterAssistant = lastUserGroupIdx >= 0 && lastUserGroupIdx < groups.length - 1;
   const readAt = hasLaterAssistant
     ? groups[lastUserGroupIdx + 1].items[0]?.created_at
@@ -367,8 +387,8 @@ function formatClock(iso: string) {
 }
 
 /** WhatsApp-style "last seen": just now → Nm → Nh → yesterday → date. */
-function lastSeenLabel(iso: string) {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+function lastSeenLabel(iso: string, now: number) {
+  const mins = Math.floor((now - new Date(iso).getTime()) / 60_000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
