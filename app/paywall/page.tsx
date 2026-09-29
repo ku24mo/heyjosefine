@@ -1,6 +1,31 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function Paywall() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function subscribe() {
+    setBusy(true);
+    setErr(null);
+    const res = await fetch("/api/checkout", { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      router.push("/auth");
+      return;
+    }
+    if (d.url) {
+      window.location.href = d.url;
+      return;
+    }
+    setErr(d.error === "billing not configured" ? "payments are coming soon" : "something went wrong");
+    setBusy(false);
+  }
+
   return (
     <main className="flex min-h-dvh flex-col items-center bg-[#f2f2f7] px-6 pt-[max(3rem,env(safe-area-inset-top))] text-black">
       <div className="w-full max-w-xs">
@@ -29,11 +54,13 @@ export default function Paywall() {
         </div>
 
         <button
-          disabled
-          className="mt-6 w-full cursor-not-allowed rounded-xl bg-neutral-200 px-4 py-3 text-[15px] font-medium text-neutral-400"
+          onClick={subscribe}
+          disabled={busy}
+          className="mt-6 w-full rounded-xl bg-[#0a84ff] px-4 py-3 text-[15px] font-medium text-white active:bg-[#0070e0] disabled:opacity-50"
         >
-          Coming soon
+          {busy ? "redirecting…" : "Subscribe — $9.99/mo"}
         </button>
+        {err && <div className="mt-2 text-center text-[13px] text-rose-500">{err}</div>}
         <Link
           href="/chat"
           className="mt-4 block text-center text-[13px] text-[#0a84ff]"

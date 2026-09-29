@@ -36,6 +36,7 @@ export default function ChatClient() {
   /** `now` state (not render-time Date.now) keeps the status line pure. */
   const [now, setNow] = useState(() => Date.now());
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [plan, setPlan] = useState<"free" | "unlimited">("free");
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
   const sendingRef = useRef(false);
@@ -111,8 +112,9 @@ export default function ChatClient() {
   const loadHistory = useCallback(async () => {
     const res = await fetch("/api/history");
     if (res.ok) {
-      const { messages } = await res.json();
+      const { messages, plan: p } = await res.json();
       setMessages(messages);
+      if (p) setPlan(p);
       const lastHer = [...messages].reverse().find((m: Bubble) => m.role === "assistant");
       if (lastHer?.created_at) setLastSeenAt(lastHer.created_at);
     }
@@ -248,10 +250,13 @@ export default function ChatClient() {
         )}
         {typing && <TypingDots />}
         {paywall && (
-          <div className="mx-auto my-4 max-w-xs rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-center text-sm text-neutral-600">
-            that&rsquo;s all the free messages for now — unlimited chatting is
-            coming soon.
-          </div>
+          <a
+            href="/paywall"
+            className="mx-auto my-4 block max-w-xs rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-center text-sm text-neutral-600"
+          >
+            that&rsquo;s all the free messages —{" "}
+            <span className="font-medium text-[#0a84ff]">go unlimited</span>
+          </a>
         )}
         <div ref={bottomRef} />
       </div>
@@ -286,6 +291,7 @@ export default function ChatClient() {
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         statusLine={statusText}
+        plan={plan}
         onDeleted={() => {
           setMessages([]);
           setPendingReadAt(null);

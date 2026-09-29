@@ -11,6 +11,7 @@ export default function ProfileSheet(props: {
   open: boolean;
   onClose: () => void;
   statusLine: string;
+  plan: "free" | "unlimited";
   onDeleted: () => void;
 }) {
   // Remounts each time it opens — no reset-on-open effect needed.
@@ -21,10 +22,12 @@ export default function ProfileSheet(props: {
 function SheetInner({
   onClose,
   statusLine,
+  plan,
   onDeleted,
 }: {
   onClose: () => void;
   statusLine: string;
+  plan: "free" | "unlimited";
   onDeleted: () => void;
 }) {
   const router = useRouter();
@@ -70,19 +73,39 @@ function SheetInner({
 
         {/* premium */}
         <div className="px-4">
-          <Link
-            href="/paywall"
-            className="flex items-center gap-3 rounded-xl bg-white px-4 py-3.5 active:bg-neutral-100"
-          >
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
-              ★
-            </span>
-            <span className="flex-1 text-left">
-              <span className="block text-[15px] font-medium">Josefine Unlimited</span>
-              <span className="block text-[12px] text-neutral-500">$9.99 / month</span>
-            </span>
-            <span className="text-neutral-300">›</span>
-          </Link>
+          {plan === "unlimited" ? (
+            <button
+              onClick={async () => {
+                const res = await fetch("/api/billing-portal", { method: "POST" });
+                const d = await res.json();
+                if (d.url) window.location.href = d.url;
+              }}
+              className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
+                ★
+              </span>
+              <span className="flex-1">
+                <span className="block text-[15px] font-medium">Josefine Unlimited</span>
+                <span className="block text-[12px] text-neutral-500">active — manage subscription</span>
+              </span>
+              <span className="text-neutral-300">›</span>
+            </button>
+          ) : (
+            <Link
+              href="/paywall"
+              className="flex items-center gap-3 rounded-xl bg-white px-4 py-3.5 active:bg-neutral-100"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
+                ★
+              </span>
+              <span className="flex-1 text-left">
+                <span className="block text-[15px] font-medium">Josefine Unlimited</span>
+                <span className="block text-[12px] text-neutral-500">$9.99 / month</span>
+              </span>
+              <span className="text-neutral-300">›</span>
+            </Link>
+          )}
         </div>
 
         {/* settings */}

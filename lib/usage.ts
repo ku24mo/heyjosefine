@@ -40,6 +40,23 @@ export async function checkUsage(
   };
 }
 
+/** Live subscription = unmetered. Counts still increment for analytics. */
+async function isUnlimited(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("plan, subscription_status")
+    .eq("id", userId)
+    .single();
+  return (
+    data?.plan === "unlimited" &&
+    (data.subscription_status === "active" ||
+      data.subscription_status === "trialing")
+  );
+}
+
 /**
  * Atomic check+increment — one DB round-trip under the row lock, so a
  * double-submit can't slip past the cap. Denied sends still count (they're
@@ -49,6 +66,11 @@ export async function gateUsage(
   supabase: SupabaseClient,
   userId: string
 ): Promise<UsageStatus> {
+  if (await isUnlimited(supabase, userId)) {
+    await incrementUsage(supabase, userId); // analytics, not gating
+    const s = await checkUsage(supabase, userId);
+    return { ...s, allowed: true, reason: undefined };
+  }
   const today = new Date().toISOString().slice(0, 10);
   const { freeDailyLimit, freeTotalLimit } = CONFIG.usage;
   const { data, error } = await supabase.rpc("usage_gate", {

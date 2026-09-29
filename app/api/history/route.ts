@@ -16,12 +16,23 @@ export async function GET() {
 
   await ensureProfile(supabase, user.id);
   const conversation = await getOrCreateConversation(supabase, user.id);
-  const [messages, presence] = await Promise.all([
+  const [messages, presence, profile] = await Promise.all([
     getRecentMessages(supabase, conversation.id, 100),
     currentPresence(supabase, user.id),
+    supabase
+      .from("profiles")
+      .select("plan, subscription_status")
+      .eq("id", user.id)
+      .single(),
   ]);
   return NextResponse.json({
     presence: presence.state,
+    plan:
+      profile.data?.plan === "unlimited" &&
+      (profile.data.subscription_status === "active" ||
+        profile.data.subscription_status === "trialing")
+        ? "unlimited"
+        : "free",
     messages: messages.map((m) => ({
       id: m.id,
       role: m.role,
