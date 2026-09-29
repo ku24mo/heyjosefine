@@ -13,10 +13,16 @@ interface Bubble {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type Presence = "here" | "away";
 type Receipt = "delivered" | "read";
 
 const REVEAL_MS = 700;
+/** She stays "online" this long after her last message before drifting to "last seen". */
+const ONLINE_LINGER_MS = 3 * 60_000;
+/** Re-render cadence so "last seen Xm ago" ages and online expires. */
+const TICK_MS = 15_000;
+
+const maxIso = (a: string | null, b: string | null) =>
+  !a ? b : !b ? a : a > b ? a : b;
 
 export default function ChatClient() {
   const [messages, setMessages] = useState<Bubble[]>([]);
@@ -24,9 +30,12 @@ export default function ChatClient() {
   const [typing, setTyping] = useState(false);
   const [paywall, setPaywall] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [presence, setPresence] = useState<Presence | null>(null);
+  /** Her most recent message's timestamp — drives "last seen"/online. */
+  const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
   /** "Read" stamp on his last bubble once she picks it up (typing starts). */
   const [pendingReadAt, setPendingReadAt] = useState<string | null>(null);
+  /** Forces re-render so status labels age on a tick, not just on events. */
+  const [, forceTick] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
   const sendingRef = useRef(false);
@@ -42,11 +51,17 @@ export default function ChatClient() {
       const res = await fetch("/api/presence");
       if (res.ok) {
         const d = await res.json();
-        if (d.presence) setPresence(d.presence);
+        if (d.lastSeenAt) setLastSeenAt((cur) => maxIso(cur, d.lastSeenAt));
       }
     } catch {
       /* header status is cosmetic — ignore failures */
     }
+  }, []);
+
+  // Status-label tick — ages "last seen", expires "online" on schedule.
+  useEffect(() => {
+    const iv = setInterval(() => forceTick((t) => t + 1), TICK_MS);
+    return () => clearInterval(iv);
   }, []);
 
   // Presence poll — her status changes with her clock, not his clicks.
@@ -70,6 +85,7 @@ export default function ChatClient() {
         for (const [i, content] of bubbles.entries()) {
           await sleep(i === 0 ? REVEAL_MS : REVEAL_MS + Math.min(content.length * 8, 1500));
           setTyping(i < bubbles.length - 1);
+          setLastSeenAt(new Date().toISOString()); // she's here — the linger clock starts
           setMessages((m) => [
             ...m,
             {
@@ -93,9 +109,10 @@ export default function ChatClient() {
     (async () => {
       const res = await fetch("/api/history");
       if (res.ok) {
-        const { messages, presence: p } = await res.json();
+        const { messages } = await res.json();
         setMessages(messages);
-        if (p) setPresence(p);
+        const lastHer = [...messages].reverse().find((m: Bubble) => m.role === "assistant");
+        if (lastHer?.created_at) setLastSeenAt(lastHer.created_at);
       }
       setLoading(false);
       // Proactive opener — she may have a reason to text first.
@@ -137,7 +154,6 @@ export default function ChatClient() {
         return;
       }
       const data = await res.json();
-      if (data.presence) setPresence(data.presence);
       if (data.tapback?.emoji) {
         // iMessage-style: her reaction lands on his last bubble.
         setMessages((m) => {
@@ -165,6 +181,13 @@ export default function ChatClient() {
     }
   }
 
+  // She's "online" while typing or within the linger window after her last
+  // message — and not just because *he* is texting at her.
+  const online =
+    typing ||
+    (lastSeenAt != null &&
+      Date.now() - new Date(lastSeenAt).getTime() < ONLINE_LINGER_MS);
+
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-white text-black">
       {/* iOS-style header — centered avatar, name, presence.
@@ -182,16 +205,13 @@ export default function ChatClient() {
           </div>
           <div className="mt-0.5 text-[13px] font-semibold leading-tight">Josefine</div>
           <div className="flex items-center gap-1 text-[10px] leading-tight text-neutral-500">
-            {presence === "here" ? (
+            {online ? (
               <>
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#34c759]" />
                 online
               </>
-            ) : presence === "away" ? (
-              <>
-                <span className="inline-block h-1.5 w-1.5 rounded-full border border-[#34c759]" />
-                away
-              </>
+            ) : lastSeenAt ? (
+              <>last seen {lastSeenLabel(lastSeenAt)}</>
             ) : (
               <>AI companion</>
             )}
@@ -344,6 +364,20 @@ function TypingDots() {
 
 function formatClock(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/** WhatsApp-style "last seen": just now → Nm → Nh → yesterday → date. */
+function lastSeenLabel(iso: string) {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const d = new Date(iso);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return `yesterday at ${formatClock(iso)}`;
+  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} at ${formatClock(iso)}`;
 }
 
 /** iOS-style separators: "Today 9:41 PM", "Yesterday 8:02 AM", "Sep 20, 7:15 PM". */

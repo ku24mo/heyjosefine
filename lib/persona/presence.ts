@@ -112,13 +112,14 @@ export function canInitiate(now: Date = new Date()): boolean {
 
 /**
  * Read-side presence for API routes (header status, opening guard).
- * Same inputs as the orchestrator computes, minus generation.
+ * Same inputs as the orchestrator computes, minus generation — plus
+ * `lastSeenAt`, the timestamp of her most recent message.
  */
 export async function currentPresence(
   supabase: SupabaseClient,
   userId: string,
   now: Date = new Date()
-): Promise<PresenceInfo> {
+): Promise<PresenceInfo & { lastSeenAt: string | null }> {
   const { data: convo } = await supabase
     .from("conversations")
     .select("id")
@@ -148,11 +149,14 @@ export async function currentPresence(
     lastUser != null &&
     now.getTime() - new Date(lastUser.created_at).getTime() < 20 * 60_000;
 
-  return herPresence({
-    userId,
-    hasHistory: recent.length > 0,
-    saidGoodnight: goodnight,
-    convoActive,
-    now,
-  });
+  return {
+    ...herPresence({
+      userId,
+      hasHistory: recent.length > 0,
+      saidGoodnight: goodnight,
+      convoActive,
+      now,
+    }),
+    lastSeenAt: lastAssistant?.created_at ?? null,
+  };
 }
