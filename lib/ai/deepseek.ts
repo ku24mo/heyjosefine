@@ -1,5 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText } from "ai";
+import { CONFIG } from "@/lib/config";
 import {
   extractJson,
   type ChatModel,
@@ -44,6 +45,8 @@ export function createDeepSeekModel(): ChatModel {
         messages: rest,
         temperature,
         maxOutputTokens: maxTokens,
+        abortSignal: AbortSignal.timeout(CONFIG.llm.timeoutMs),
+        maxRetries: CONFIG.llm.maxRetries,
       });
       return text;
     },
@@ -77,6 +80,8 @@ export function createDeepSeekModel(): ChatModel {
             ],
             temperature,
             maxOutputTokens: maxTokens,
+            abortSignal: AbortSignal.timeout(CONFIG.llm.timeoutMs),
+            maxRetries: CONFIG.llm.maxRetries,
             providerOptions: {
               openaiCompatible: {
                 // DeepSeek supports response_format json_object — forces valid JSON.

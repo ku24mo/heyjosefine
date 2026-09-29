@@ -13,7 +13,9 @@ import {
   releaseTurnLock,
 } from "@/lib/state/conversation";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { gateUsage } from "@/lib/usage";
+import { gateBurst, gateUsage } from "@/lib/usage";
+
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
@@ -30,6 +32,14 @@ export async function POST(request: Request) {
 
   await ensureProfile(supabase, user.id);
   await getOrCreateState(supabase, user.id); // the lock row must exist
+
+  // Rapid-fire cap — in-voice slow-down instead of burning an LLM call.
+  if (!(await gateBurst(supabase, user.id))) {
+    return NextResponse.json(
+      { bubbles: ["one sec 😂 you're typing faster than I can read"], burst: true },
+      { status: 429 }
+    );
+  }
 
   const usage = await gateUsage(supabase, user.id); // atomic count+check
   if (!usage.allowed) {

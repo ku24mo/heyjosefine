@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "seed:life": "tsx scripts/seed-life.ts",
-    "eval": "tsx scripts/eval/run.ts"
+    "eval": "tsx scripts/eval/run.ts",
+    "loadtest": "tsx scripts/load-test.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.57",

@@ -14,6 +14,8 @@ import {
 } from "@/lib/state/conversation";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+export const maxDuration = 60;
+
 /** Called once when the chat screen mounts — may return a proactive opener. */
 export async function GET() {
   const supabase = await createServerSupabase();

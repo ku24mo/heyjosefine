@@ -95,6 +95,23 @@ export async function gateUsage(
   };
 }
 
+/**
+ * Per-minute rapid-fire cap — protects LLM spend from spam/loops. Atomic under
+ * the conversation_state row lock. Pre-migration (columns/RPC missing) → allow.
+ */
+export async function gateBurst(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("burst_gate", {
+    p_user_id: userId,
+    p_limit: CONFIG.usage.burstPerMinute,
+    p_window_seconds: 60,
+  });
+  if (error || !data) return true; // unavailable → don't block the turn
+  return data.allowed === true;
+}
+
 export async function incrementUsage(
   supabase: SupabaseClient,
   userId: string

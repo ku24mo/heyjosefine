@@ -44,11 +44,17 @@ export const CONFIG = {
     maxOpenersConsidered: 5,
   },
 
-  // Usage limits (free tier) — raised during dev testing; the paywall
-  // behavior itself is verified. Tighten before real users.
+  // LLM call bounds — a hung provider call can't hold the turn lock forever.
+  llm: {
+    timeoutMs: 45_000, // abort each model call after this
+    maxRetries: 2, // transient 429/5xx retries inside the AI SDK
+  },
+
+  // Usage limits (free tier) — enough to form the habit, tight enough to convert.
   usage: {
-    freeDailyLimit: 500, // user messages per day
-    freeTotalLimit: 5000, // lifetime cap → paywall stub
+    freeDailyLimit: 40, // user messages per day
+    freeTotalLimit: 150, // lifetime cap → paywall
+    burstPerMinute: 10, // rapid-fire cap — protects LLM spend, not the user
   },
 
   // Mood momentum

@@ -25,21 +25,44 @@ export async function getOrCreateConversation(
   supabase: SupabaseClient,
   userId: string
 ) {
-  const { data } = await supabase
+  // Active thread = latest that isn't retired by a reset. Pre-migration the
+  // is_active column doesn't exist — fall back to "latest conversation"
+  // only when the filtered query errors, never on an empty result.
+  const active = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { data } = !active.error
+    ? active
+    : await supabase
+        .from("conversations")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+  if (data) return data;
+
+  const { data: created, error } = await supabase
+    .from("conversations")
+    .insert({ user_id: userId })
+    .select()
+    .single();
+  if (!error) return created;
+  // Unique-violation → another request won the create race; take theirs.
+  const { data: winner } = await supabase
     .from("conversations")
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (data) return data;
-  const { data: created, error } = await supabase
-    .from("conversations")
-    .insert({ user_id: userId })
-    .select()
-    .single();
-  if (error) throw error;
-  return created;
+  if (winner) return winner;
+  throw error;
 }
 
 export async function getRecentMessages(

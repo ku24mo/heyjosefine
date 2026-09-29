@@ -161,7 +161,9 @@ export async function acquireTurnLock(
   userId: string,
   opts: { ttlMs?: number; waitMs?: number } = {}
 ): Promise<boolean> {
-  const ttlMs = opts.ttlMs ?? 90_000;
+  // TTL must outlast a worst-case bounded turn: reply gen (timeout × retries)
+  // + async extraction rides under the lock too.
+  const ttlMs = opts.ttlMs ?? 150_000;
   const deadline = Date.now() + (opts.waitMs ?? 12_000);
   for (;;) {
     const cutoff = new Date(Date.now() - ttlMs).toISOString();

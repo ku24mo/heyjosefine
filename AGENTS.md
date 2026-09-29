@@ -18,5 +18,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Eval harness: `npm run eval` (requires live env keys; creates throwaway users).
 - Supabase schema: `supabase/migrations/0001_init.sql` + numbered follow-ups; life threads seed via `npm run seed:life`. Migrations are applied manually in the Supabase SQL editor — no direct DB connection in env.
 - Semantic recall needs `EMBEDDING_API_KEY` (OpenAI-compatible embeddings, `text-embedding-3-small`/1536-dim) + migration `0005` (`match_memories` RPC). Without it, retrieval silently falls back to heuristic — fine for dev.
-- Per-user turn lock lives on `conversation_state.turn_locked_at` (migration `0004`); routes acquire it around orchestration.
+- Per-user turn lock lives on `conversation_state.turn_locked_at` (migration `0004`); routes acquire it around orchestration. TTL 150s — must outlast a worst-case bounded LLM turn + async extraction.
 - Memory consolidation cron: `GET /api/cron/consolidate`, Vercel cron daily 04:00 UTC, guarded by `CRON_SECRET` env.
+- Billing: Stripe webhook `/api/stripe/webhook` is the only writer of `profiles.plan` (migration `0006`); active subscription bypasses usage caps. Needs `STRIPE_SECRET_KEY`/`STRIPE_PRICE_ID`/`STRIPE_WEBHOOK_SECRET`.
+- Burst gate: `burst_gate` RPC + `conversation_state.burst_*` columns (migration `0007`) cap rapid-fire sends at `CONFIG.usage.burstPerMinute`; DB missing → fails open.
+- One active conversation per user: `conversations.is_active` + partial unique index (migration `0007`); `/api/reset` retires the old thread.
+- No pg pooler needed — supabase-js speaks HTTPS/PostgREST; Supabase pools server-side.
+- Load test: `npm run loadtest -- --users N --msgs M [--mock]` — creates throwaway auth users, exercises the real turn lock + orchestrator, reports p50/p95 and invariant checks.
