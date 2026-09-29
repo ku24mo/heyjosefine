@@ -9,7 +9,10 @@ import {
   insertMessage,
 } from "@/lib/db/queries";
 import { extractAndStore } from "@/lib/memory/extract";
-import { HeuristicRetriever } from "@/lib/memory/retrieve";
+import {
+  HeuristicRetriever,
+  semanticScoresFor,
+} from "@/lib/memory/retrieve";
 import { effectiveStatus } from "@/lib/persona/life";
 import { herPresence } from "@/lib/persona/presence";
 import { stageForFamiliarity, type DisclosureTier } from "@/lib/persona/profile";
@@ -118,11 +121,12 @@ export async function orchestrate(opts: {
 
   // ── 1. Load context ───────────────────────────────────────────────────────
   const conversation = await getOrCreateConversation(supabase, userId);
-  const [recent, allMemories, openLoops, state] = await Promise.all([
+  const [recent, allMemories, openLoops, state, semanticScores] = await Promise.all([
     getRecentMessages(supabase, conversation.id, CONFIG.rhythm.recentMessageWindow),
     getActiveMemories(supabase, userId),
     getOpenLoops(supabase, userId),
     getOrCreateState(supabase, userId),
+    semanticScoresFor(supabase, userId, userMessage),
   ]);
 
   const stage = stageForFamiliarity(state.familiarity);
@@ -151,6 +155,7 @@ export async function orchestrate(opts: {
     userMessage,
     recentEntities,
     openLoops,
+    semanticScores,
   });
 
   // ── 3. Rules → directives ─────────────────────────────────────────────────

@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { embedTexts } from "@/lib/ai/embed";
 import type { ChatModel } from "@/lib/ai/provider";
 import { extractionSchema } from "@/lib/ai/schemas";
 import type { MemoryRow, OpenLoopRow } from "@/lib/types";
 import { dedupeNewMemories } from "./dedupe";
+import { semanticScoresFor } from "./retrieve";
 
 /**
  * Async memory extraction — runs AFTER the reply is sent.
@@ -66,7 +68,21 @@ export async function extractAndStore(opts: {
 }): Promise<ExtractionResult> {
   const { model, supabase, userId, exchange } = opts;
 
-  const existingMemList = opts.existingMemories
+  // Dedupe context = the memories most similar to this exchange, not a
+  // blind slice — otherwise old dupes go unseen once a user passes ~40.
+  const sims = await semanticScoresFor(
+    supabase,
+    userId,
+    exchange.map((m) => m.content).join("\n"),
+    40
+  );
+  const existingOrdered = sims
+    ? [...opts.existingMemories].sort(
+        (a, b) => (sims.get(b.id) ?? -1) - (sims.get(a.id) ?? -1)
+      )
+    : opts.existingMemories;
+
+  const existingMemList = existingOrdered
     .slice(0, 40)
     .map((m) => `[${m.id}] (${m.category}) ${m.content}`)
     .join("\n");
@@ -94,21 +110,41 @@ export async function extractAndStore(opts: {
   );
 
   if (accepted.length) {
-    await supabase.from("memories").insert(
-      accepted.map((m) => ({
-        user_id: userId,
-        category: m.category,
-        content: m.content,
-        importance: m.importance,
-        confidence: m.confidence,
-        keywords: m.keywords,
-        entities: m.entities,
-        learned_from_user: m.learned_from_user,
-        supporting_memory_ids: m.supporting_memory_ids,
-        evidence_count: Math.max(1, m.supporting_memory_ids.length),
-        last_referenced_at: new Date().toISOString(),
-      }))
-    );
+    const { data: inserted } = await supabase
+      .from("memories")
+      .insert(
+        accepted.map((m) => ({
+          user_id: userId,
+          category: m.category,
+          content: m.content,
+          importance: m.importance,
+          confidence: m.confidence,
+          keywords: m.keywords,
+          entities: m.entities,
+          learned_from_user: m.learned_from_user,
+          supporting_memory_ids: m.supporting_memory_ids,
+          evidence_count: Math.max(1, m.supporting_memory_ids.length),
+          last_referenced_at: new Date().toISOString(),
+        }))
+      )
+      .select("id");
+
+    // Embed on write — semantic recall needs vectors on every row.
+    if (inserted?.length) {
+      const vecs = await embedTexts(accepted.map((m) => m.content));
+      if (vecs) {
+        await Promise.all(
+          inserted.map((row, i) =>
+            vecs[i]
+              ? supabase
+                  .from("memories")
+                  .update({ embedding: vecs[i] })
+                  .eq("id", row.id)
+              : Promise.resolve()
+          )
+        );
+      }
+    }
   }
 
   if (reinforced.length) {

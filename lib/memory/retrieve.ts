@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { embedText } from "@/lib/ai/embed";
 import { CONFIG } from "@/lib/config";
 import type { MemoryRow, OpenLoopRow } from "@/lib/types";
 
@@ -15,6 +17,8 @@ export interface RetrievalContext {
   recentEntities: string[]; // entity names seen in recent messages
   openLoops: OpenLoopRow[];
   maxResults?: number;
+  /** memory id → cosine similarity, from match_memories RPC (optional). */
+  semanticScores?: Map<string, number>;
 }
 
 export interface RetrievedMemory {
@@ -29,6 +33,32 @@ export interface RetrievedMemory {
 
 export interface MemoryRetriever {
   retrieve(all: MemoryRow[], ctx: RetrievalContext): RetrievedMemory[];
+}
+
+/**
+ * Embed the incoming message → cosine-similar memory ids. Returns undefined
+ * when embeddings aren't configured or fail — heuristic retrieval still runs.
+ */
+export async function semanticScoresFor(
+  supabase: SupabaseClient,
+  userId: string,
+  text: string,
+  limit = 40
+): Promise<Map<string, number> | undefined> {
+  const q = await embedText(text);
+  if (!q) return undefined;
+  const { data, error } = await supabase.rpc("match_memories", {
+    p_user_id: userId,
+    p_embedding: q,
+    p_limit: limit,
+  });
+  if (error || !data?.length) return undefined;
+  return new Map(
+    (data as { id: string; similarity: number }[]).map((r) => [
+      r.id,
+      r.similarity,
+    ])
+  );
 }
 
 function daysSince(iso: string | null): number {
@@ -82,6 +112,9 @@ export class HeuristicRetriever implements MemoryRetriever {
       score += Math.min(entHits * 0.5, 1.2);
       // linked to an active open loop
       if (loopMemoryIds.has(m.id)) score += 0.6;
+      // semantic similarity — embedded recall ("interview" finds "job app")
+      const sim = ctx.semanticScores?.get(m.id);
+      if (sim != null) score += Math.max(0, sim) * 1.4;
       // staleness penalty — she doesn't robotically recall everything
       score -= Math.min(daysSince(m.last_referenced_at) * 0.008, 0.35);
       // patterns require more evidence to surface

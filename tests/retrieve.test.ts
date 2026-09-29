@@ -77,4 +77,43 @@ describe("HeuristicRetriever", () => {
     const out = retriever.retrieve([m, other], { ...base, openLoops: [loop] });
     expect(out[0].memory.id).toBe("m-loop");
   });
+
+  it("semantic similarity surfaces memories keywords would miss", () => {
+    // "interview" has no lexical overlap with "job application" — only the
+    // embedding score can lift it. Simulated as a match_memories result.
+    const semantic = makeMemory({
+      id: "m-sem",
+      content: "User applied to a new job",
+      importance: 3,
+      keywords: ["career"],
+    });
+    const other = makeMemory({
+      content: "likes hiking",
+      importance: 6,
+      keywords: ["hiking"],
+    });
+    const out = retriever.retrieve([semantic, other], {
+      ...base,
+      userMessage: "the interview went well",
+      semanticScores: new Map([["m-sem", 0.85]]),
+    });
+    expect(out[0].memory.id).toBe("m-sem");
+  });
+
+  it("heuristics still gate semantic hits — stale low-confidence stays out", () => {
+    const stale = makeMemory({
+      id: "m-stale",
+      content: "mentioned a concert once",
+      importance: 2,
+      confidence: 0.2,
+      created_at: new Date(Date.now() - 400 * 86_400_000).toISOString(),
+      last_referenced_at: null,
+    });
+    const out = retriever.retrieve([stale], {
+      ...base,
+      userMessage: "concerts",
+      semanticScores: new Map([["m-stale", 0.9]]),
+    });
+    expect(out).toHaveLength(0);
+  });
 });

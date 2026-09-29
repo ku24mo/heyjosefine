@@ -16,4 +16,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Persona source of truth: `lib/persona/CHARACTER_BIBLE.md`; prompt-facing distillation in `lib/persona/profile.ts`.
 - Verify with: `npm run typecheck`, `npm run lint`, `npm test`.
 - Eval harness: `npm run eval` (requires live env keys; creates throwaway users).
-- Supabase schema: `supabase/migrations/0001_init.sql`; life threads seed via `npm run seed:life`.
+- Supabase schema: `supabase/migrations/0001_init.sql` + numbered follow-ups; life threads seed via `npm run seed:life`. Migrations are applied manually in the Supabase SQL editor — no direct DB connection in env.
+- Semantic recall needs `EMBEDDING_API_KEY` (OpenAI-compatible embeddings, `text-embedding-3-small`/1536-dim) + migration `0005` (`match_memories` RPC). Without it, retrieval silently falls back to heuristic — fine for dev.
+- Per-user turn lock lives on `conversation_state.turn_locked_at` (migration `0004`); routes acquire it around orchestration.
+- Memory consolidation cron: `GET /api/cron/consolidate`, Vercel cron daily 04:00 UTC, guarded by `CRON_SECRET` env.

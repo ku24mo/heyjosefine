@@ -203,3 +203,24 @@ export const openingSchema = z.object({
   bubbles: bubblesArray,
 });
 export type OpeningOutput = z.infer<typeof openingSchema>;
+
+/** Memory consolidation — merges duplicates, archives trivia. Cron-driven. */
+export const consolidationSchema = z.object({
+  merges: lenientArray(
+    z.object({
+      ids: z.array(z.string()).min(2),
+      merged: z.object({
+        category: memoryCategoryEnum,
+        content: z.string(),
+        importance: score110,
+        confidence: unitInterval,
+        keywords: z.array(z.string()).default([]),
+        entities: z
+          .array(z.object({ type: entityTypeEnum, name: z.string() }))
+          .default([]),
+      }),
+    })
+  ).default([]),
+  archive_ids: z.array(z.string()).default([]),
+});
+export type ConsolidationOutput = z.infer<typeof consolidationSchema>;
