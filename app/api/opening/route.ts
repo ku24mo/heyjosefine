@@ -4,6 +4,7 @@ import { generateOpening } from "@/lib/ai/opening";
 import {
   ensureProfile,
   getOrCreateConversation,
+  getRecentMessages,
   insertMessage,
 } from "@/lib/db/queries";
 import { canInitiate } from "@/lib/persona/presence";
@@ -26,8 +27,15 @@ export async function GET() {
 
   await ensureProfile(supabase, user.id);
 
-  // Dead-night hours — she doesn't start conversations at 3am.
-  if (!canInitiate()) return NextResponse.json({ bubbles: [] });
+  // Dead-night hours — she doesn't start conversations at 3am. Exception:
+  // a first visit always gets an opener (the product opens itself); an
+  // empty screen is a dead first impression, and the prompt is hour-aware
+  // anyway so a 2am hello reads as restless-night energy.
+  const conversation = await getOrCreateConversation(supabase, user.id);
+  const isFirstVisit =
+    (await getRecentMessages(supabase, conversation.id, 1)).length === 0;
+  if (!isFirstVisit && !canInitiate())
+    return NextResponse.json({ bubbles: [] });
 
   await getOrCreateState(supabase, user.id); // lock row must exist
   // Concurrent mounts/tabs must not double-fire an opener — short wait only;
@@ -40,7 +48,6 @@ export async function GET() {
     const opening = await generateOpening({ supabase, model, userId: user.id });
     if (!opening) return NextResponse.json({ bubbles: [] });
 
-    const conversation = await getOrCreateConversation(supabase, user.id);
     for (const [i, content] of opening.bubbles.entries()) {
       await insertMessage(supabase, {
         conversation_id: conversation.id,
