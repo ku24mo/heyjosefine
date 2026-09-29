@@ -40,10 +40,12 @@ export default function ChatClient() {
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
   const sendingRef = useRef(false);
 
-  const scrollToBottom = useCallback(() => {
-    requestAnimationFrame(() =>
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-    );
+  const scrollToBottom = useCallback((instant = false) => {
+    const go = () =>
+      bottomRef.current?.scrollIntoView({ behavior: instant ? "auto" : "smooth" });
+    // instant: double rAF so it lands after the fresh messages have painted
+    if (instant) requestAnimationFrame(() => requestAnimationFrame(go));
+    else requestAnimationFrame(go);
   }, []);
 
   const refreshPresence = useCallback(async () => {
@@ -132,9 +134,10 @@ export default function ChatClient() {
   useEffect(() => {
     void (async () => {
       await loadHistory();
+      scrollToBottom(true); // open at the newest message, not the top
       await tryOpening(); // proactive opener — she may have a reason to text first
     })();
-  }, [loadHistory, tryOpening]);
+  }, [loadHistory, tryOpening, scrollToBottom]);
 
   async function send(e: FormEvent) {
     e.preventDefault();
