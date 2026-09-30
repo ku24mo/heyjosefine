@@ -6,6 +6,7 @@ import {
   getOrCreateConversation,
   getRecentMessages,
 } from "@/lib/db/queries";
+import { pickMedia, type PickedMedia } from "@/lib/media/pick";
 import { currentDevelopment, effectiveStatus } from "@/lib/persona/life";
 import { GOODNIGHT } from "@/lib/persona/presence";
 import { stageForFamiliarity } from "@/lib/persona/profile";
@@ -31,6 +32,7 @@ export type OpeningStrategy =
   | "first_hello"
   | "morning_after"
   | "milestone"
+  | "media"
   | "normal";
 
 /** Relationship anniversaries she notices herself. */
@@ -54,6 +56,8 @@ export interface OpeningResult {
   strategy: OpeningStrategy;
   reason: string;
   bubbles: string[];
+  /** Photo attached to this opener — the route persists it + the ledger. */
+  media: PickedMedia | null;
 }
 
 export async function generateOpening(opts: {
@@ -87,6 +91,7 @@ export async function generateOpening(opts: {
       strategy: "first_hello",
       reason: "brand new visitor",
       bubbles: out.bubbles.slice(0, 3),
+      media: null,
     };
   }
 
@@ -115,7 +120,7 @@ export async function generateOpening(opts: {
   // ── Strategy selection ──────────────────────────────────────────────────────
   const now = Date.now();
   const cooldown = CONFIG.opening.nudgeCooldownHours * 3_600_000;
-  const candidates: { strategy: OpeningStrategy; reason: string; score: number; loop?: OpenLoopRow; thread?: LifeThreadRow; milestone?: number }[] = [];
+  const candidates: { strategy: OpeningStrategy; reason: string; score: number; loop?: OpenLoopRow; thread?: LifeThreadRow; milestone?: number; media?: PickedMedia }[] = [];
 
   for (const l of loops.filter((l) => l.status === "active")) {
     if (l.last_nudged_at && now - new Date(l.last_nudged_at).getTime() < cooldown)
@@ -181,6 +186,27 @@ export async function generateOpening(opts: {
     });
   }
 
+  // A photo IS the opener — a timeline asset just unlocked, or she just
+  // shares a thing unprompted (what real texting looks like). Never when
+  // the last stretch was emotionally heavy — no taco pic during bad news.
+  // pickMedia enforces tier/unlock-day/cadence/never-twice itself.
+  if (!state.recent_emotion) {
+    const mediaPick = await pickMedia(supabase, {
+      userId,
+      stageTier: tier,
+      daysKnown,
+      intent: null,
+    });
+    if (mediaPick) {
+      candidates.push({
+        strategy: "media",
+        reason: `photo: ${mediaPick.asset.subject}`,
+        score: 35,
+        media: mediaPick,
+      });
+    }
+  }
+
   if (hoursSince > 48) {
     candidates.push({ strategy: "playful", reason: "long absence", score: 20 });
   }
@@ -199,6 +225,8 @@ export async function generateOpening(opts: {
     summary: state.summary,
     loop: chosen.loop,
     milestone: chosen.milestone,
+    mediaSubject:
+      chosen.strategy === "media" ? chosen.media?.asset.subject : undefined,
     thread: chosen.thread
       ? { title: chosen.thread.title, development: currentDevelopment(chosen.thread)! }
       : undefined,
@@ -231,5 +259,6 @@ export async function generateOpening(opts: {
     strategy: chosen.strategy,
     reason: chosen.reason,
     bubbles: out.bubbles.slice(0, 3),
+    media: chosen.strategy === "media" ? chosen.media ?? null : null,
   };
 }

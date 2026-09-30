@@ -27,6 +27,8 @@ export default function ProfileSheet(props: {
   plan: "free" | "unlimited";
   anonymous: boolean;
   relationship: Relationship | null;
+  /** Photos she's actually sent him — the keepsakes strip. */
+  moments: string[];
   onClaim: () => void;
   onDeleted: () => void;
 }) {
@@ -41,6 +43,7 @@ function SheetInner({
   plan,
   anonymous,
   relationship,
+  moments,
   onClaim,
   onDeleted,
 }: {
@@ -49,6 +52,7 @@ function SheetInner({
   plan: "free" | "unlimited";
   anonymous: boolean;
   relationship: Relationship | null;
+  moments: string[];
   onClaim: () => void;
   onDeleted: () => void;
 }) {
@@ -120,6 +124,25 @@ function SheetInner({
               </div>
               <div className="mt-0.5 text-[11px] text-neutral-400">
                 {STAGE_LABEL[relationship.stage] ?? relationship.stage}
+              </div>
+            </div>
+          )}
+          {moments.length > 0 && (
+            <div className="mt-3 w-full border-t border-neutral-200/60 pt-3">
+              <div className="mb-2 text-center text-[11px] text-neutral-400">
+                shared with you
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {moments.map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={url}
+                    alt=""
+                    loading="lazy"
+                    className="h-20 w-20 shrink-0 rounded-xl object-cover"
+                  />
+                ))}
               </div>
             </div>
           )}

@@ -132,6 +132,18 @@ export const responseSchema = z.object({
     .nullable()
     .catch(null)
     .default(null),
+  /**
+   * Optional photo she wants to attach — an INTENT, not a file. The
+   * orchestrator resolves it to a real asset (or drops it). Sparingly.
+   */
+  media: z
+    .object({
+      subject: z.string().max(40),
+      scene: z.string().max(60).nullable().default(null),
+    })
+    .nullable()
+    .catch(null)
+    .default(null),
   state_update: z
     .object({
       mood: z.string(),

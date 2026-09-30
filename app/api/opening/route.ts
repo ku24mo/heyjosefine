@@ -7,6 +7,7 @@ import {
   getRecentMessages,
   insertMessage,
 } from "@/lib/db/queries";
+import { recordMediaSend } from "@/lib/media/pick";
 import { canInitiate } from "@/lib/persona/presence";
 import {
   acquireTurnLock,
@@ -56,6 +57,21 @@ export async function GET() {
         meta: { bubble_index: i, intention: { acts: ["callback"], openness: "leave_open", targetLength: "short", form: "single" } },
       });
     }
+    // The photo lands after her words, like a real burst of texts.
+    if (opening.media) {
+      const mediaMsg = await insertMessage(supabase, {
+        conversation_id: conversation.id,
+        role: "assistant",
+        content: "",
+        meta: {
+          media: {
+            url: opening.media.url,
+            subject: opening.media.asset.subject,
+          },
+        },
+      });
+      await recordMediaSend(supabase, user.id, opening.media.asset.id, mediaMsg.id);
+    }
     await supabase
       .from("conversations")
       .update({ last_message_at: new Date().toISOString() })
@@ -63,6 +79,9 @@ export async function GET() {
     return NextResponse.json({
       bubbles: opening.bubbles,
       strategy: opening.strategy,
+      media: opening.media
+        ? { url: opening.media.url, subject: opening.media.asset.subject }
+        : null,
     });
   } finally {
     await releaseTurnLock(supabase, user.id);

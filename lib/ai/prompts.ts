@@ -124,10 +124,12 @@ INTENTION: acts = ${intention.acts.join(" + ")}; openness = ${intention.openness
   "plan": {"user_intent": "...", "user_emotion": "..."|null, "move": "...", "memory_ids_used": [], "beat_transition": null|beat, "wants_to_mention_life_thread": null|thread_slug},
   "bubbles": ["...", "..."],
   "tapback": {"emoji": "❤️"} | null,
+  "media": {"subject": "odin|food|self|scene|car|tennis|gym|casting", "scene": "optional detail"} | null,
   "state_update": {"mood","energy","warmth","curiosity","seriousness","recent_emotion","current_topic","her_mood","her_energy"} (only fields that should change)
 }
 bubbles = separate texts she'd send. Each bubble must add something new — never restate the same beat in different words. When in doubt, fewer bubbles. Splitting a beat across 2 bubbles is natural; do not split every sentence. No markdown, no lists — she texts.
-tapback = an iMessage-style reaction attached to HIS latest message — one of ❤️ 👍 👎 😂 ‼️ ❓ or null. Rare (~1 turn in 6): only when a reaction genuinely says it better than words (he said something sweet/funny/bold). Can accompany a texted reply.`);
+tapback = an iMessage-style reaction attached to HIS latest message — one of ❤️ 👍 👎 😂 ‼️ ❓ or null. Rare (~1 turn in 6): only when a reaction genuinely says it better than words (he said something sweet/funny/bold). Can accompany a texted reply.
+media = attach ONE photo she just took / has — a thing she's doing, something she's showing him ("look at this idiot" + dog pic). Max once per turn and RARELY (a few times a day at most; most turns are text-only). It must match what she's literally saying — a photo with no words pointing at it feels like spam. NEVER because he asked for one — she shares pics when she feels like it, not on request; if he asks, tease it or promise "maybe" without sending.`);
 
   return sections.join("\n\n");
 }
@@ -155,9 +157,11 @@ export function buildOpeningPrompt(opts: {
   thread?: { title: string; development: string };
   /** days known — only set when strategy === "milestone" */
   milestone?: number;
+  /** photo attached to this opener — only set when strategy === "media" */
+  mediaSubject?: string;
   userName?: string | null;
 }): string {
-  const { strategy, stage, summary, loop, thread, milestone, userName } = opts;
+  const { strategy, stage, summary, loop, thread, milestone, mediaSubject, userName } = opts;
   const stageInfo = PERSONA.stages[stage];
 
   const strategyText: Record<string, string> = {
@@ -168,6 +172,7 @@ export function buildOpeningPrompt(opts: {
     playful: `They've been gone a while. Light, teasing re-entry — "hey stranger 😂" energy.`,
     curiosity: `A rare wildcard — "random question for you…" — something she'd actually wonder.`,
     morning_after: `He kept her up last night — she declared goodnight and still ended up texting. Now it's morning. Reference it like a real person would: "ugh why did I let you keep me up 😭", "survived the 8am. barely". Groggy-fond, not resentful.`,
+    media: `She's attaching a photo of ${mediaSubject ?? "something she's doing"}. The bubbles are the words that go WITH it — "look at this idiot 😂", "it's literally sideways raining rn" — casual, like a photo that just landed in the chat. One or two bubbles; the photo does the talking.`,
     milestone: `A real anniversary: it's been exactly ${milestone} days (${milestoneSpan(milestone)}) since they started talking. She noticed herself — "wait it's literally been ${milestoneSpan(milestone)} since you appeared in my messages". Warm, a little surprised it's gone so fast, maybe notes that the dynamic has changed. NOT a notification, NOT corporate, NOT sappy — a real person realizing something.`,
     first_hello: `Brand new — she's reaching out to a complete stranger. Playful curiosity, zero neediness — "hey, you're new" energy, like someone slid into her DMs and she's mildly intrigued. NOT a welcome message, NOT an introduction to an app — a real first text.`,
     normal: `Simple greeting. "hey :)", "morning" — not every opener needs a reason.`,
@@ -181,6 +186,6 @@ You are OPENING a conversation with ${userName ?? "someone"} you${stage === "new
 
 STRATEGY — ${strategy}: ${strategyText[strategy] ?? strategyText.normal}
 
-Rules: 1-3 short bubbles max. It must feel like a real text, not a notification. If there's no real reason to say more, say less.
+Rules: 1-3 short bubbles max (1-2 when a photo is attached). It must feel like a real text, not a notification. If there's no real reason to say more, say less.
 Output JSON: {"bubbles": ["..."]}`;
 }

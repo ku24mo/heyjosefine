@@ -59,6 +59,12 @@ export const CONFIG = {
     burstPerMinute: 10, // rapid-fire cap — protects LLM spend, not the user
   },
 
+  // Media sends — scarcity is realism; she shares pics like a person, not a feed.
+  media: {
+    dailyCap: 2, // max photos she'll send a user per day
+    cooldownHours: 4, // min gap between sends
+  },
+
   // Mood momentum
   mood: {
     decayPerTurn: 0.15, // drifts toward baseline each exchange

@@ -19,6 +19,8 @@ export interface MessageMeta {
   beat?: Beat;
   /** iMessage-style tapback she attached to this message (emoji) */
   tapback?: string;
+  /** A photo she sent — resolved CDN url + what it depicts. */
+  media?: { url: string; subject: string; scene?: string | null };
 }
 
 export type MemoryCategory =
@@ -169,6 +171,8 @@ export interface AssistantResponse {
   bubbles: string[];
   /** iMessage-style tapback on the user's latest message — sparingly */
   tapback?: { emoji: string } | null;
+  /** Photo she wants to share — intent only, the backend picks the file. */
+  media?: { subject: string; scene: string | null } | null;
   state_update?: Partial<
     Pick<
       ConversationStateRow,

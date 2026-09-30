@@ -85,6 +85,7 @@ export async function POST(request: Request) {
       replyDelayMs: result.replyDelayMs,
       tapback: result.tapback,
       presence: result.presence,
+      media: result.media,
     });
   } catch (err) {
     console.error("[/api/chat] orchestration failed:", err);

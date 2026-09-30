@@ -13,6 +13,7 @@ import {
   HeuristicRetriever,
   semanticScoresFor,
 } from "@/lib/memory/retrieve";
+import { pickMedia, recordMediaSend } from "@/lib/media/pick";
 import { effectiveStatus } from "@/lib/persona/life";
 import { GOODNIGHT, herPresence } from "@/lib/persona/presence";
 import { stageForFamiliarity, type DisclosureTier } from "@/lib/persona/profile";
@@ -59,6 +60,8 @@ export interface OrchestrateResult {
   tapback: { emoji: string; messageId: string } | null;
   /** Her presence state this turn — the client's header reads it. */
   presence: "here" | "away";
+  /** A photo she attached this turn (resolved by pickMedia), if any. */
+  media: { url: string; subject: string } | null;
   /** Async memory extraction — await via after() so it never blocks the reply. */
   extraction: Promise<unknown>;
 }
@@ -80,6 +83,11 @@ function normalizeTapback(emoji: string | undefined | null): string | null {
   if (TAPBACKS.has(t)) return t;
   return TAPBACK_ALIASES[t.toLowerCase()] ?? null;
 }
+
+/** He's explicitly asking for a photo → any media proposal this turn dies.
+ *  She shares pics when SHE feels like it — never on demand. */
+export const PHOTO_REQUEST =
+  /\b(send|show|take|snap|post|give|gimme|let me see|lemme see)\b[^.!?]*\b(pic|pics|photo|photos|selfie|picture|pictures|img|image)\b|\b(pic|pics|photo|photos|selfie|selfies|picture|pictures)\b[^.!?]*\b(please|plz|pls|now|of you|of u|urself|yourself)\b|\bpic\s*(plz|pls|please|\?)/i;
 
 /** She said goodnight within the last ~8h — that's binding, not a hint.
  *  Scans her last few messages: a post-goodnight "ugh stop 😭" without a
@@ -125,13 +133,20 @@ export async function orchestrate(opts: {
 
   // ── 1. Load context ───────────────────────────────────────────────────────
   const conversation = await getOrCreateConversation(supabase, userId);
-  const [recent, allMemories, openLoops, state, semanticScores] = await Promise.all([
+  const [recent, allMemories, openLoops, state, semanticScores, profile] = await Promise.all([
     getRecentMessages(supabase, conversation.id, CONFIG.rhythm.recentMessageWindow),
     getActiveMemories(supabase, userId),
     getOpenLoops(supabase, userId),
     getOrCreateState(supabase, userId),
     semanticScoresFor(supabase, userId, userMessage),
+    supabase.from("profiles").select("created_at").eq("id", userId).maybeSingle(),
   ]);
+  const daysKnown = profile.data?.created_at
+    ? Math.floor(
+        (now.getTime() - new Date(profile.data.created_at).getTime()) /
+          86_400_000
+      )
+    : 0;
 
   const stage = stageForFamiliarity(state.familiarity);
   const tier: DisclosureTier = ({ new: 1, warming: 2, familiar: 2, close: 3 } as const)[stage];
@@ -298,6 +313,39 @@ export async function orchestrate(opts: {
     .update({ last_message_at: new Date().toISOString() })
     .eq("id", conversation.id);
 
+  // ── 6a. Media — she proposes, the resolver disposes. Never on request,
+  // never into a heavy moment (comfort-tagged assets only), ledgered. ──
+  let media: OrchestrateResult["media"] = null;
+  if (out.media?.subject && !PHOTO_REQUEST.test(userMessage)) {
+    const heavy =
+      signals.emotionalCharge || signals.disclosureDepth === "emotional";
+    const picked = await pickMedia(supabase, {
+      userId,
+      stageTier: tier,
+      daysKnown,
+      intent: { subject: out.media.subject, scene: out.media.scene },
+      comfortOnly: heavy,
+      now,
+    });
+    if (picked) {
+      const mediaMsg = await insertMessage(supabase, {
+        conversation_id: conversation.id,
+        role: "assistant",
+        content: "",
+        meta: {
+          media: {
+            url: picked.url,
+            subject: picked.asset.subject,
+            scene: out.media.scene,
+          },
+        },
+      });
+      assistantMessages.push(mediaMsg);
+      await recordMediaSend(supabase, userId, picked.asset.id, mediaMsg.id);
+      media = { url: picked.url, subject: picked.asset.subject };
+    }
+  }
+
   // ── 6b. Tapback — iMessage-style reaction on his message ──────────────────
   // Rate-limited: never twice in a row, never on a dead conversation.
   let tapback: OrchestrateResult["tapback"] = null;
@@ -434,6 +482,7 @@ export async function orchestrate(opts: {
     directives: directives.map((d) => `${d.rule}: ${d.reason}`),
     tapback,
     presence: presence.state,
+    media,
     replyDelayMs: replyDelayMs({
       bubbles: out.bubbles,
       awayPenaltyMs,

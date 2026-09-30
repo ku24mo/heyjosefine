@@ -6,12 +6,19 @@ import { getBrowserSupabase } from "@/lib/supabase/client";
 import ClaimSheet from "./claim-sheet";
 import ProfileSheet from "./profile-sheet";
 
+interface BubbleMedia {
+  url: string;
+  subject: string;
+  scene?: string | null;
+}
+
 interface Bubble {
   id: string;
   role: "user" | "assistant";
   content: string;
   created_at?: string;
   tapback?: string | null;
+  media?: BubbleMedia | null;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -98,11 +105,11 @@ export default function ChatClient() {
 
   // Staggered reveal — bubbles land one at a time like real texts.
   const revealBubbles = useCallback(
-    (bubbles: string[]) => {
+    (bubbles: string[], media?: BubbleMedia | null) => {
       pendingRef.current = pendingRef.current.then(async () => {
         for (const [i, content] of bubbles.entries()) {
           await sleep(i === 0 ? REVEAL_MS : REVEAL_MS + Math.min(content.length * 8, 1500));
-          setTyping(i < bubbles.length - 1);
+          setTyping(i < bubbles.length - 1 || !!media);
           setLastSeenAt(new Date().toISOString()); // she's here — the linger clock starts
           setMessages((m) => [
             ...m,
@@ -111,6 +118,23 @@ export default function ChatClient() {
               role: "assistant",
               content,
               created_at: new Date().toISOString(),
+            },
+          ]);
+          receiveSound();
+          scrollToBottom();
+        }
+        // The photo lands last in the burst, like a real attach-and-send.
+        if (media) {
+          await sleep(REVEAL_MS + 300);
+          setLastSeenAt(new Date().toISOString());
+          setMessages((m) => [
+            ...m,
+            {
+              id: `local-media-${Date.now()}`,
+              role: "assistant",
+              content: "",
+              created_at: new Date().toISOString(),
+              media,
             },
           ]);
           receiveSound();
@@ -139,11 +163,11 @@ export default function ChatClient() {
   const tryOpening = useCallback(async () => {
     const open = await fetch("/api/opening");
     if (open.ok) {
-      const { bubbles } = await open.json();
-      if (bubbles?.length) {
+      const { bubbles, media } = await open.json();
+      if (bubbles?.length || media) {
         setTyping(true);
         scrollToBottom();
-        await revealBubbles(bubbles);
+        await revealBubbles(bubbles ?? [], media ?? null);
       }
     }
   }, [revealBubbles, scrollToBottom]);
@@ -226,7 +250,7 @@ export default function ChatClient() {
       setTyping(true);
       setPendingReadAt(new Date().toISOString());
       await sleep(Math.min(typingLeadMs, delayLeft));
-      await revealBubbles(bubbles);
+      await revealBubbles(bubbles, data.media ?? null);
     } catch {
       setTyping(false);
       await revealBubbles(["my brain just froze 😅 say that again?"]);
@@ -343,6 +367,9 @@ export default function ChatClient() {
         statusLine={statusText}
         plan={plan}
         relationship={relationship}
+        moments={messages
+          .map((m) => m.media?.url)
+          .filter((u): u is string => !!u)}
         anonymous={anonymous}
         onClaim={() => {
           setSheetOpen(false);
@@ -415,9 +442,21 @@ function MessageList({ messages, pendingReadAt }: { messages: Bubble[]; pendingR
                 return (
                   <div
                     key={m.id}
-                    className={`im-bubble im-pop ${g.role === "user" ? "im-user" : "im-her"} ${last ? "im-tail" : ""} ${i > 0 ? "mt-[2px]" : ""}`}
+                    className={`im-bubble im-pop ${g.role === "user" ? "im-user" : "im-her"} ${last ? "im-tail" : ""} ${i > 0 ? "mt-[2px]" : ""} ${m.media?.url ? "!p-1" : ""}`}
                   >
-                    {m.content}
+                    {m.media?.url ? (
+                      <a href={m.media.url} target="_blank" rel="noreferrer" className="block">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={m.media.url}
+                          alt={m.media.subject}
+                          loading="lazy"
+                          className="block h-auto w-[220px] max-w-full rounded-[14px]"
+                        />
+                      </a>
+                    ) : (
+                      m.content
+                    )}
                     {m.tapback && <div className="im-tapback">{m.tapback}</div>}
                   </div>
                 );
