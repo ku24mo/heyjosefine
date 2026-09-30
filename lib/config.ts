@@ -65,6 +65,14 @@ export const CONFIG = {
     cooldownHours: 4, // min gap between sends
   },
 
+  // Her life — episodes + day sheet
+  life: {
+    episodeMinImportance: 2, // lower bar than user facts — they're anchors that fade
+    episodeMaxPerTurn: 3,
+    threadCooldownDays: 2, // a mentioned thread rests this long before resurfacing
+    dayMaxSlots: 6,
+  },
+
   // Mood momentum
   mood: {
     decayPerTurn: 0.15, // drifts toward baseline each exchange

@@ -30,7 +30,10 @@ export type MemoryCategory =
   | "preference"
   | "emotion"
   | "event"
-  | "pattern";
+  | "pattern"
+  /** Something SHE told the user about her own life — consistency anchor
+   *  that decays like any memory. Low importance is fine; it fades. */
+  | "her_episode";
 
 export interface MemoryEntity {
   type: "person" | "place" | "event" | "goal" | "conversation" | "thing";
@@ -124,6 +127,21 @@ export interface LifeThreadRow {
   body: string;
   seeded_at: string;
   resolved_at: string | null;
+}
+
+/** One slot of her day — the precommitted schedule everyone shares. */
+export interface HerDaySlot {
+  start: string; // "08:00" Stockholm
+  end: string;
+  label: string; // "lecture — contract law"
+  kind: string;  // uni | shoot | gym | tennis | odin | home | parents | social | drive
+}
+
+export interface HerDayRow {
+  day: string; // Stockholm date, YYYY-MM-DD
+  slots: HerDaySlot[];
+  headline: string | null;
+  generated_at: string;
 }
 
 export interface LifeThreadStateRow {

@@ -39,7 +39,12 @@ export function mediaUrl(supabase: SupabaseClient, storagePath: string): string 
  *  unlock_day/tier/not-sent filtering (DB-side). */
 export function chooseAsset(
   assets: MediaAsset[],
-  opts: { intent?: MediaIntent | null; comfortOnly?: boolean }
+  opts: {
+    intent?: MediaIntent | null;
+    comfortOnly?: boolean;
+    /** day-plausible subjects get first pick — soft bias, never a filter */
+    preferSubjects?: string[];
+  }
 ): MediaAsset | null {
   let pool = assets;
   if (opts.comfortOnly) pool = pool.filter((a) => a.tags.includes("comfort"));
@@ -59,10 +64,15 @@ export function chooseAsset(
       );
       if (sceneHits.length) pool = sceneHits;
     }
+  } else if (opts.preferSubjects?.length) {
+    // No specific intent: a photo that's plausible for her day wins.
+    const preferred = opts.preferSubjects.map((s) => s.toLowerCase());
+    const hits = pool.filter((a) =>
+      preferred.includes(a.subject.toLowerCase())
+    );
+    if (hits.length) pool = hits;
   }
 
-  // Deterministic-ish freshness: rotate through the pool so consecutive
-  // eligible sets don't always serve the same first row.
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -81,6 +91,8 @@ export async function pickMedia(
     intent?: MediaIntent | null;
     /** true during heavy/emotional moments — only comfort-tagged assets */
     comfortOnly?: boolean;
+    /** her-day-plausible subjects get first pick on open-intent sends */
+    preferSubjects?: string[];
     now?: Date;
   }
 ): Promise<PickedMedia | null> {
@@ -125,6 +137,7 @@ export async function pickMedia(
   const asset = chooseAsset(eligible, {
     intent: opts.intent,
     comfortOnly: opts.comfortOnly,
+    preferSubjects: opts.preferSubjects,
   });
   if (!asset) return null;
   return { asset, url: mediaUrl(supabase, asset.storage_path) };

@@ -1,11 +1,13 @@
 import { PERSONA, type DisclosureTier, type FamiliarityStage } from "@/lib/persona/profile";
 import { herNowLine } from "@/lib/time";
 import type { RetrievedMemory } from "@/lib/memory/retrieve";
-import type { LifeThreadRow } from "@/lib/types";
+import type { LifeThreadRow, LifeThreadStateRow, HerDayRow } from "@/lib/types";
 import type { Directive } from "./rules";
 import type { Intention } from "@/lib/types";
 import type { ConversationStateRow, OpenLoopRow } from "@/lib/types";
-import { currentDevelopment } from "@/lib/persona/life";
+import { currentDevelopment, currentDevelopmentIndex } from "@/lib/persona/life";
+import { slotNow } from "@/lib/persona/day";
+import { CONFIG } from "@/lib/config";
 
 /**
  * Prompt assembly. The persona is distilled (not the whole bible) —
@@ -19,13 +21,19 @@ export function buildSystemPrompt(opts: {
   memories: RetrievedMemory[];
   openLoops: OpenLoopRow[];
   lifeThreads: LifeThreadRow[];
+  /** per-user told-state per thread — which beats he's already heard */
+  threadStates?: LifeThreadStateRow[];
+  /** today's precommitted schedule (global — one Tuesday for everyone) */
+  herDay?: HerDayRow | null;
+  /** yesterday's headline — morning callbacks */
+  yesterdayHeadline?: string | null;
   directives: Directive[];
   intention: Intention;
   isFirstConversation: boolean;
   /** day-seeded tone — her baseline differs day to day */
   dayVibe?: { mood: string; energy: number };
 }): string {
-  const { state, stage, tier, memories, openLoops, lifeThreads, directives, intention, dayVibe } = opts;
+  const { state, stage, tier, memories, openLoops, lifeThreads, threadStates, herDay, yesterdayHeadline, directives, intention, dayVibe } = opts;
   const stageInfo = PERSONA.stages[stage];
   const sections: string[] = [];
 
@@ -71,10 +79,26 @@ ${PERSONA.rhythm.map((r) => `- ${r}`).join("\n")}`);
 ${cast.join("\n")}`);
 
   // ── Her current state ─────────────────────────────────────────────────────
+  const stateByThread = new Map(
+    (threadStates ?? []).map((s) => [s.thread_id, s])
+  );
   const lifeBits = lifeThreads
     .map((t) => {
       const dev = currentDevelopment(t);
-      return dev ? `- ${t.title}: ${dev}${t.she_wants_to_talk ? "" : " (she keeps this vague at first)"}` : null;
+      const devIdx = currentDevelopmentIndex(t);
+      if (!dev || devIdx === null) return null;
+      const ts = stateByThread.get(t.id);
+      const heard = ts != null && ts.awareness_stage >= devIdx;
+      const recently =
+        ts?.last_mentioned_at &&
+        Date.now() - new Date(ts.last_mentioned_at).getTime() <
+          CONFIG.life.threadCooldownDays * 86_400_000;
+      const tag = heard
+        ? " (he's heard this beat — escalate or reference it, don't re-tell it as new)"
+        : recently
+          ? " (she mentioned this very recently — only resurface if natural)"
+          : "";
+      return `- ${t.title}: ${dev}${t.she_wants_to_talk ? "" : " (she keeps this vague at first)"}${tag}`;
     })
     .filter(Boolean)
     .join("\n");
@@ -82,13 +106,35 @@ ${cast.join("\n")}`);
 HER LIFE (things happening for her right now — she may bring these up naturally, especially when sharing):
 ${lifeBits || "- nothing major"}`);
 
+  // ── Her day — the precommitted schedule that keeps her story straight ──
+  if (herDay?.slots?.length) {
+    const nowSlot = slotNow(herDay.slots);
+    sections.push(`HER DAY TODAY (this is what actually happened / is happening — don't contradict it; past slots = things she can mention doing, future slots = her plans):
+${herDay.slots.map((s) => `- ${s.start}–${s.end}: ${s.label}`).join("\n")}
+Right now she's ${nowSlot ? `at/doing: ${nowSlot.label}` : "between things"}${yesterdayHeadline ? `\nYesterday was: ${yesterdayHeadline}` : ""}`);
+  }
+
   // ── What she knows about the user ─────────────────────────────────────────
-  const memLines = memories.map((r) => {
+  const userMems = memories.filter((r) => r.memory.category !== "her_episode");
+  const herEps = memories.filter((r) => r.memory.category === "her_episode");
+  const memLines = userMems.map((r) => {
     const fuzz = r.fuzzy ? " (vague memory — hedge it: 'wait, didn't you…?')" : "";
     return `- ${r.memory.content}${fuzz}`;
   });
   sections.push(`WHAT SHE REMEMBERS ABOUT THE USER (reference naturally, never recite; never mention when they said it):
 ${memLines.length ? memLines.join("\n") : "- nothing yet — this is early"}`);
+
+  // ── What she's already told him — consistency + callback material ────────
+  if (herEps.length) {
+    const epLines = herEps.map((r) => {
+      const days = Math.floor(
+        (Date.now() - new Date(r.memory.created_at).getTime()) / 86_400_000
+      );
+      return `- ${r.memory.content} (told ${days === 0 ? "today" : `${days}d ago`})`;
+    });
+    sections.push(`WHAT SHE'S ALREADY TOLD HIM (consistency anchors — call back if he asks, escalate if the story moved; NEVER re-tell as fresh news and never contradict these details):
+${epLines.join("\n")}`);
+  }
 
   const loopLines = openLoops
     .filter((l) => l.status === "active")
@@ -159,9 +205,11 @@ export function buildOpeningPrompt(opts: {
   milestone?: number;
   /** photo attached to this opener — only set when strategy === "media" */
   mediaSubject?: string;
+  /** compact day sheet line — keeps the opener consistent with her schedule */
+  herDayLine?: string;
   userName?: string | null;
 }): string {
-  const { strategy, stage, summary, loop, thread, milestone, mediaSubject, userName } = opts;
+  const { strategy, stage, summary, loop, thread, milestone, mediaSubject, herDayLine, userName } = opts;
   const stageInfo = PERSONA.stages[stage];
 
   const strategyText: Record<string, string> = {
@@ -180,7 +228,7 @@ export function buildOpeningPrompt(opts: {
 
   return `You are Josefine (${PERSONA.age}, ${PERSONA.identity}, ${PERSONA.location}). Voice: ${PERSONA.voice.sentenceLength}; ${PERSONA.voice.casing}; emoji: ${PERSONA.voice.emoji.join(" ")}.
 
-RIGHT NOW FOR HER: ${herNowLine()}, Stockholm — the opener must be plausible for this time ("morning ☕️" at 8am, not 23:00).
+RIGHT NOW FOR HER: ${herNowLine()}, Stockholm — the opener must be plausible for this time ("morning ☕️" at 8am, not 23:00).${herDayLine ? `\nHER DAY TODAY: ${herDayLine} — her opener must fit this schedule.` : ""}
 
 You are OPENING a conversation with ${userName ?? "someone"} you${stage === "new" ? " just started talking to" : "'ve been talking to"} — relationship stage: ${stage} (${stageInfo.register}).
 

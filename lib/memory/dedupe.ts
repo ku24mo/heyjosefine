@@ -93,3 +93,50 @@ export function dedupeNewMemories(
 
   return { accepted, reinforced };
 }
+
+/** Same shape as NewMemory minus user-only fields — her episodes aren't
+ *  learned facts, they're consistency anchors. */
+export interface NewEpisode {
+  content: string;
+  importance: number;
+  keywords: string[];
+  entities: { type: string; name: string }[];
+  thread_slug: string | null;
+}
+
+/**
+ * Dedupe her-side episodes against existing her_episode rows only.
+ * Lower importance gate than user facts — a "shoot ran 3h over" detail is
+ * cheap to keep and pays off when he calls back; decay handles the fade.
+ */
+export function dedupeNewEpisodes(
+  candidates: ExtractionOutput["her_episodes"],
+  existing: MemoryRow[]
+): { accepted: NewEpisode[]; reinforced: string[] } {
+  const reinforced: string[] = [];
+  const accepted: NewEpisode[] = [];
+  const episodes = existing.filter(
+    (m) => m.category === "her_episode" && m.status === "active"
+  );
+
+  for (const c of candidates.slice(0, CONFIG.life.episodeMaxPerTurn)) {
+    if (c.importance < CONFIG.life.episodeMinImportance) continue;
+    const dupe = episodes.find(
+      (m) =>
+        entityOverlap(m.entities, c.entities) ||
+        tokenOverlap(m.keywords, c.keywords) >= 2
+    );
+    if (dupe) {
+      reinforced.push(dupe.id);
+      continue;
+    }
+    accepted.push({
+      content: c.content,
+      importance: Math.round(c.importance),
+      keywords: c.keywords,
+      entities: c.entities,
+      thread_slug: c.thread_slug ?? null,
+    });
+  }
+  return { accepted, reinforced };
+}

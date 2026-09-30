@@ -3,7 +3,8 @@ import { embedTexts } from "@/lib/ai/embed";
 import type { ChatModel } from "@/lib/ai/provider";
 import { extractionSchema } from "@/lib/ai/schemas";
 import type { MemoryRow, OpenLoopRow } from "@/lib/types";
-import { dedupeNewMemories } from "./dedupe";
+import { dedupeNewEpisodes, dedupeNewMemories } from "./dedupe";
+import { resolveDayHint } from "@/lib/persona/day";
 import { semanticScoresFor } from "./retrieve";
 
 /**
@@ -29,6 +30,17 @@ OPEN LOOPS — things with an unresolved future:
 - create: interview Friday, waiting on a reply, "I'm thinking about quitting", a plan she should ask about later.
 - resolve/cancel/stale when the loop closes or dies. IMPORTANT: if the user's latest message ANSWERED what a loop was waiting on — he said "will subcontract it" while a loop waits on his decision — emit {"action":"resolve","id":"..."} for that loop. Lingering answered loops make her re-ask dead questions, which reads as not listening.
 - importance + emotional_weight: "buy milk" ≈ 2/2; "waiting to hear if Sarah likes me" ≈ 7/9.
+
+HER EPISODES — what the ASSISTANT told the user about her own life:
+- Store concrete claims she made that could be contradicted or called back later: "the shoot ran 3 hours over", "lecture at 8 tomorrow", "Odin shredded my cushion", "I'm at my parents' this weekend".
+- Do NOT store canon she merely restated (that she has a dog, is a law student, lives in Stockholm — already known) or pure flavor with no callback value.
+- Named people must come from her existing world only — never record invented names.
+- Importance: 2-3 for texture (a minor anecdote), 4-6 for things he'd plausibly ask about again (the shoot outcome, an upcoming exam), 7+ only for genuinely significant events.
+- thread_slug: set it when the episode belongs to a known life thread, else null.
+
+HER COMMITMENTS — dated plans she stated out loud:
+- Only when she committed to a specific day: "shoot tomorrow" → {"day_hint":"tomorrow",...}, "exam friday" → {"day_hint":"friday",...}. Vague "sometime this week" → don't store.
+- These become her actual schedule — only emit things she really said, not user guesses.
 
 CONVERSATION SUMMARY — 1-3 sentences on what is happening RIGHT NOW (topic, user's state, where it's heading). This is separate from memories: summary = current situation, memory = durable facts.
 
@@ -152,6 +164,59 @@ export async function extractAndStore(opts: {
       .from("memories")
       .update({ last_referenced_at: new Date().toISOString() })
       .in("id", reinforced);
+  }
+
+  // ── her episodes — what she told him, deduped against prior episodes ────
+  const ep = dedupeNewEpisodes(out.her_episodes, opts.existingMemories);
+  if (ep.accepted.length) {
+    const { data: epRows } = await supabase
+      .from("memories")
+      .insert(
+        ep.accepted.map((e) => ({
+          user_id: userId,
+          category: "her_episode",
+          content: e.content,
+          importance: e.importance,
+          confidence: 1.0,
+          keywords: e.thread_slug
+            ? [...e.keywords, `thread:${e.thread_slug}`]
+            : e.keywords,
+          entities: e.entities,
+        }))
+      )
+      .select("id");
+    if (epRows?.length) {
+      const vecs = await embedTexts(ep.accepted.map((e) => e.content));
+      if (vecs) {
+        await Promise.all(
+          epRows.map((row, i) =>
+            vecs[i]
+              ? supabase
+                  .from("memories")
+                  .update({ embedding: vecs[i] })
+                  .eq("id", row.id)
+              : Promise.resolve()
+          )
+        );
+      }
+    }
+  }
+  if (ep.reinforced.length) {
+    await supabase
+      .from("memories")
+      .update({ last_referenced_at: new Date().toISOString() })
+      .in("id", ep.reinforced);
+  }
+
+  // ── her commitments — dated plans become tomorrow's schedule ────────────
+  for (const c of out.her_commitments.slice(0, 3)) {
+    const day = resolveDayHint(c.day_hint);
+    if (!day) continue;
+    await supabase.from("her_commitments").insert({
+      user_id: userId,
+      target_day: day,
+      content: c.content,
+    });
   }
 
   for (const u of out.memory_updates) {

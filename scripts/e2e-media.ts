@@ -16,7 +16,7 @@ const service = createClient(
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean) {
   console.log(`  ${ok ? "✓" : "✗"} ${name}`);
-  ok ? pass++ : fail++;
+  if (ok) pass++; else fail++;
 }
 
 async function main() {

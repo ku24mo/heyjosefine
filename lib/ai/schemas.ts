@@ -19,6 +19,7 @@ const memoryCategoryEnum = z.enum([
   "emotion",
   "event",
   "pattern",
+  "her_episode",
 ]);
 
 const entityTypeEnum = z.enum([
@@ -199,12 +200,32 @@ const openLoopUpdateSchema = z.object({
   related_memory_ids: z.array(z.string()).optional(),
 });
 
+/** Things SHE told the user about her own life — consistency anchors. */
+const herEpisodeSchema = z.object({
+  content: z.string().min(3),
+  importance: score110,
+  keywords: z.array(z.string()).default([]),
+  entities: z
+    .array(z.object({ type: entityTypeEnum, name: z.string() }))
+    .default([]),
+  thread_slug: z.string().nullable().default(null),
+});
+
+/** A dated claim she made ("shoot tomorrow") → becomes tomorrow's schedule. */
+const herCommitmentSchema = z.object({
+  /** "tomorrow" | weekday name | iso date | null (= no clear day) */
+  day_hint: z.string().nullable().default(null),
+  content: z.string().min(3),
+});
+
 /** Post-turn extraction (async — never blocks the reply). */
 export const extractionSchema = z.object({
   conversation_summary: z
     .string()
     .describe("what is happening right now in this conversation, 1-3 sentences"),
   new_memories: lenientArray(newMemorySchema).default([]),
+  her_episodes: lenientArray(herEpisodeSchema).default([]),
+  her_commitments: lenientArray(herCommitmentSchema).default([]),
   memory_updates: lenientArray(memoryUpdateSchema).default([]),
   open_loop_updates: lenientArray(openLoopUpdateSchema).default([]),
 });
@@ -214,6 +235,23 @@ export type ExtractionOutput = z.infer<typeof extractionSchema>;
 export const openingSchema = z.object({
   bubbles: bubblesArray,
 });
+
+/** Her daily sheet generation (lib/persona/day.ts). */
+export const herDaySchema = z.object({
+  slots: z
+    .array(
+      z.object({
+        start: z.string().regex(/^\d{1,2}:\d{2}$/),
+        end: z.string().regex(/^\d{1,2}:\d{2}$/),
+        label: z.string(),
+        kind: z.string(),
+      })
+    )
+    .max(8)
+    .default([]),
+  headline: z.string().default(""),
+});
+export type HerDayOutput = z.infer<typeof herDaySchema>;
 export type OpeningOutput = z.infer<typeof openingSchema>;
 
 /** Memory consolidation — merges duplicates, archives trivia. Cron-driven. */

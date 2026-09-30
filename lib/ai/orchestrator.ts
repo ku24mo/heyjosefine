@@ -3,6 +3,7 @@ import { CONFIG } from "@/lib/config";
 import {
   getActiveMemories,
   getLifeThreads,
+  getLifeThreadStates,
   getOpenLoops,
   getOrCreateConversation,
   getRecentMessages,
@@ -14,7 +15,8 @@ import {
   semanticScoresFor,
 } from "@/lib/memory/retrieve";
 import { pickMedia, recordMediaSend } from "@/lib/media/pick";
-import { effectiveStatus } from "@/lib/persona/life";
+import { getHerDayContext } from "@/lib/persona/day";
+import { currentDevelopmentIndex, effectiveStatus } from "@/lib/persona/life";
 import { GOODNIGHT, herPresence } from "@/lib/persona/presence";
 import { stageForFamiliarity, type DisclosureTier } from "@/lib/persona/profile";
 import { herNow } from "@/lib/time";
@@ -133,14 +135,17 @@ export async function orchestrate(opts: {
 
   // ── 1. Load context ───────────────────────────────────────────────────────
   const conversation = await getOrCreateConversation(supabase, userId);
-  const [recent, allMemories, openLoops, state, semanticScores, profile] = await Promise.all([
-    getRecentMessages(supabase, conversation.id, CONFIG.rhythm.recentMessageWindow),
-    getActiveMemories(supabase, userId),
-    getOpenLoops(supabase, userId),
-    getOrCreateState(supabase, userId),
-    semanticScoresFor(supabase, userId, userMessage),
-    supabase.from("profiles").select("created_at").eq("id", userId).maybeSingle(),
-  ]);
+  const [recent, allMemories, openLoops, state, semanticScores, profile, threadStates, dayCtx] =
+    await Promise.all([
+      getRecentMessages(supabase, conversation.id, CONFIG.rhythm.recentMessageWindow),
+      getActiveMemories(supabase, userId),
+      getOpenLoops(supabase, userId),
+      getOrCreateState(supabase, userId),
+      semanticScoresFor(supabase, userId, userMessage),
+      supabase.from("profiles").select("created_at").eq("id", userId).maybeSingle(),
+      getLifeThreadStates(supabase, userId),
+      getHerDayContext(model, now),
+    ]);
   const daysKnown = profile.data?.created_at
     ? Math.floor(
         (now.getTime() - new Date(profile.data.created_at).getTime()) /
@@ -209,6 +214,9 @@ export async function orchestrate(opts: {
     memories: retrieved,
     openLoops,
     lifeThreads,
+    threadStates,
+    herDay: dayCtx.day,
+    yesterdayHeadline: dayCtx.yesterdayHeadline,
     directives,
     intention,
     isFirstConversation: recent.length === 0,
@@ -421,17 +429,23 @@ export async function orchestrate(opts: {
       .in("id", usedIds);
   }
 
-  // Track what this user knows about her life.
+  // Track what this user knows about her life — awareness_stage = the
+  // timeline beat he's heard, so a retold bit becomes escalation, not rerun.
   if (out.plan.wants_to_mention_life_thread) {
     const thread = lifeThreads.find(
       (t) => t.slug === out.plan.wants_to_mention_life_thread
     );
     if (thread) {
-      await supabase.from("life_thread_state").upsert({
-        user_id: userId,
-        thread_id: thread.id,
-        last_mentioned_at: new Date().toISOString(),
-      });
+      const devIdx = currentDevelopmentIndex(thread);
+      await supabase.from("life_thread_state").upsert(
+        {
+          user_id: userId,
+          thread_id: thread.id,
+          last_mentioned_at: new Date().toISOString(),
+          ...(devIdx !== null ? { awareness_stage: devIdx } : {}),
+        },
+        { onConflict: "user_id,thread_id" }
+      );
     }
   }
 
@@ -440,6 +454,11 @@ export async function orchestrate(opts: {
     ...recent.slice(-4).map((m) => ({ role: m.role, content: m.content })),
     { role: "user" as const, content: userMessage },
     ...out.bubbles.map((b) => ({ role: "assistant" as const, content: b })),
+    // A photo send is a real event — extraction can record "she sent a pic
+    // of Odin" so callbacks ("that pic you sent") stay consistent.
+    ...(media
+      ? [{ role: "assistant" as const, content: `[sent a photo: ${media.subject}]` }]
+      : []),
   ];
   const extraction = extractAndStore({
     model,

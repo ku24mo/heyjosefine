@@ -42,14 +42,21 @@ export async function loadLifeThreadSeeds(): Promise<
  */
 export function currentDevelopment(thread: LifeThreadRow): string | null {
   if (!thread.timeline?.length) return null;
+  const idx = currentDevelopmentIndex(thread);
+  return idx === null ? null : thread.timeline[idx].development;
+}
+
+/** Index of the current timeline beat (-1 → null), same math as above. */
+export function currentDevelopmentIndex(thread: LifeThreadRow): number | null {
+  if (!thread.timeline?.length) return null;
   const elapsedDays =
     (Date.now() - new Date(thread.seeded_at).getTime()) / 86_400_000;
-  let current: string | null = null;
-  for (const t of thread.timeline) {
+  let current = -1;
+  for (const [i, t] of thread.timeline.entries()) {
     const days = parseFloat(t.at);
-    if (elapsedDays >= days) current = t.development;
+    if (elapsedDays >= days) current = i;
   }
-  return current;
+  return current === -1 ? null : current;
 }
 
 /** Resolve status: mark a thread resolved if its timeline ran out. */

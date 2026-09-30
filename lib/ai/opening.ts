@@ -7,7 +7,8 @@ import {
   getRecentMessages,
 } from "@/lib/db/queries";
 import { pickMedia, type PickedMedia } from "@/lib/media/pick";
-import { currentDevelopment, effectiveStatus } from "@/lib/persona/life";
+import { dayLine, getHerDayContext, slotNow, slotToSubjects } from "@/lib/persona/day";
+import { currentDevelopment, currentDevelopmentIndex, effectiveStatus } from "@/lib/persona/life";
 import { GOODNIGHT } from "@/lib/persona/presence";
 import { stageForFamiliarity } from "@/lib/persona/profile";
 import { herNow } from "@/lib/time";
@@ -186,6 +187,14 @@ export async function generateOpening(opts: {
     });
   }
 
+  // Her day sheet — shared reality for openers; media prefers subjects that
+  // are plausible right now (no gym pic on a day she's home sick).
+  const dayCtx = await getHerDayContext(model);
+  const currentSlot = dayCtx.day ? slotNow(dayCtx.day.slots) : null;
+  const preferSubjects = currentSlot
+    ? slotToSubjects(currentSlot.kind)
+    : undefined;
+
   // A photo IS the opener — a timeline asset just unlocked, or she just
   // shares a thing unprompted (what real texting looks like). Never when
   // the last stretch was emotionally heavy — no taco pic during bad news.
@@ -196,6 +205,7 @@ export async function generateOpening(opts: {
       stageTier: tier,
       daysKnown,
       intent: null,
+      preferSubjects,
     });
     if (mediaPick) {
       candidates.push({
@@ -225,6 +235,7 @@ export async function generateOpening(opts: {
     summary: state.summary,
     loop: chosen.loop,
     milestone: chosen.milestone,
+    herDayLine: dayLine(dayCtx.day),
     mediaSubject:
       chosen.strategy === "media" ? chosen.media?.asset.subject : undefined,
     thread: chosen.thread
@@ -244,6 +255,21 @@ export async function generateOpening(opts: {
       .from("open_loops")
       .update({ last_nudged_at: new Date().toISOString() })
       .eq("id", chosen.loop.id);
+  }
+
+  // A thread used as an opener is a beat he's now heard — record it so the
+  // next in-turn mention escalates instead of re-telling.
+  if (chosen.thread) {
+    const devIdx = currentDevelopmentIndex(chosen.thread);
+    await supabase.from("life_thread_state").upsert(
+      {
+        user_id: userId,
+        thread_id: chosen.thread.id,
+        last_mentioned_at: new Date().toISOString(),
+        ...(devIdx !== null ? { awareness_stage: devIdx } : {}),
+      },
+      { onConflict: "user_id,thread_id" }
+    );
   }
 
   // Celebrate each milestone exactly once. Fail-soft: a missing column
