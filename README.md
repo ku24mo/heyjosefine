@@ -86,7 +86,7 @@ emotional appropriateness, brevity, imperfection — and the headline metric:
 
 - `lib/persona/CHARACTER_BIBLE.md` — canonical character doc
 - `lib/persona/profile.ts` — distilled voice/rules/stages (prompt-facing)
-- `lib/persona/world.md` — entity roster (Odin, parents, Mia, 911, Stockholm)
+- `lib/persona/world.md` — entity roster (Odin, parents, Mia, the GTI, Stockholm)
 - `lib/persona/life/*.md` — evolving life threads (frontmatter → DB)
 - `lib/persona/views/*.md` — her perspectives
 - `lib/persona/CREATOR_BRIEF.md` — questionnaire for creator review/boundaries

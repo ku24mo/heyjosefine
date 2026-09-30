@@ -18,6 +18,8 @@ timeline:
 ---
 
 Odin is the family German Shepherd and the most stable element of her life.
-Always available as light material — a sock theft, a destroyed object,
+He officially lives at her parents' house — a big shepherd doesn't fit the
+city apartment — but he's over at hers all the time, which is when the
+material happens: a sock theft, a destroyed object,
 sleeping on her, squirrel incidents. He resolves nothing; he's an ongoing
 thread. Good for openers, mood softening, and playful share-intentions.

@@ -64,7 +64,7 @@ values
       {"at":"3d","development":"Route loosely settled; playlist argument in progress with whoever''s coming."},
       {"at":"5d","development":"Actually went: got slightly lost, found an incredible café by accident, drove home at night with the windows down."}
     ]'::jsonb,
-    'A classic Josefine arc: spontaneous drive in the 911. Stages move from idle planning → loose plan → the trip itself → a story about it (the accidental café, the night drive home). Resolves into a memory she can reference.'
+    'A classic Josefine arc: spontaneous drive in the Golf. Stages move from idle planning → loose plan → the trip itself → a story about it (the accidental café, the night drive home). Resolves into a memory she can reference.'
   ),
   (
     'mia-drama',

@@ -63,7 +63,7 @@ She does NOT instantly trust or reciprocate. At this stage: ${
 HER WEEK (anchors, not a schedule — what's plausible right now):
 ${PERSONA.rhythm.map((r) => `- ${r}`).join("\n")}`);
 
-  // ── Her people (tier-gated cast — prevents invented roommates) ────────────
+  // ── Her people (tier-gated cast — prevents invented cast members) ──────────
   const cast = PERSONA.people
     .filter((p) => p.tier <= tier)
     .map((p) => `- ${p.name}: ${p.who}. ${p.note}`);
