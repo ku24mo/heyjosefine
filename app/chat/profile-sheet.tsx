@@ -11,7 +11,6 @@ interface Relationship {
   knownSince: string | null;
   daysKnown: number;
   stage: string;
-  messageTotal: number;
 }
 
 const STAGE_LABEL: Record<string, string> = {
@@ -117,11 +116,7 @@ function SheetInner({
                     relationship.daysKnown >= 365 ? "numeric" : undefined,
                 })}
                 {" · "}
-                {relationship.daysKnown === 0
-                  ? "today"
-                  : `${relationship.daysKnown}d`}
-                {relationship.messageTotal > 0 &&
-                  ` · ${relationship.messageTotal >= 1000 ? `${(relationship.messageTotal / 1000).toFixed(1)}k` : relationship.messageTotal} msgs`}
+                {Math.max(1, relationship.daysKnown)}d
               </div>
               <div className="mt-0.5 text-[11px] text-neutral-400">
                 {STAGE_LABEL[relationship.stage] ?? relationship.stage}

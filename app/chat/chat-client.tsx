@@ -43,7 +43,6 @@ export default function ChatClient() {
     knownSince: string | null;
     daysKnown: number;
     stage: string;
-    messageTotal: number;
   } | null>(null);
   /** Anonymous guest vs claimed account — gates the claim wall + sheet rows. */
   const [anonymous, setAnonymous] = useState(false);

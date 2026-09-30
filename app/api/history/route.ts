@@ -18,7 +18,7 @@ export async function GET() {
 
   await ensureProfile(supabase, user.id);
   const conversation = await getOrCreateConversation(supabase, user.id);
-  const [messages, presence, profile, state, usageRows] = await Promise.all([
+  const [messages, presence, profile, state] = await Promise.all([
     getRecentMessages(supabase, conversation.id, 100),
     currentPresence(supabase, user.id),
     supabase
@@ -27,12 +27,7 @@ export async function GET() {
       .eq("id", user.id)
       .single(),
     getOrCreateState(supabase, user.id),
-    supabase.from("usage").select("message_count").eq("user_id", user.id),
   ]);
-  const messageTotal = (usageRows.data ?? []).reduce(
-    (s, r) => s + (r.message_count ?? 0),
-    0
-  );
   const knownSince = profile.data?.created_at ?? null;
   const daysKnown = knownSince
     ? Math.floor((Date.now() - new Date(knownSince).getTime()) / 86_400_000)
@@ -43,7 +38,6 @@ export async function GET() {
       knownSince,
       daysKnown,
       stage: stageForFamiliarity(state.familiarity),
-      messageTotal,
     },
     plan:
       profile.data?.plan === "unlimited" &&
