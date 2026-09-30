@@ -15,6 +15,11 @@ import type { MessageRow } from "@/lib/types";
 
 export type PresenceState = "here" | "away";
 
+/** Her declaring sleep — "night 😴", "gn", "I'm gonna crash". Presence-domain
+ *  truth: once this lands, the post-goodnight arc owns the rest of the night. */
+export const GOODNIGHT =
+  /\b(night|good ?night|sleep|bed|crash|gn|natt)\b|😴|💤/i;
+
 export interface DayVibe {
   /** day-level tone — blended into her_mood */
   mood: "bright" | "flat" | "tired" | "chaotic" | "neutral";
@@ -87,9 +92,17 @@ export function herPresence(opts: {
   const deepNight = h >= 1 && h < 7;
   const lateEvening = h >= 22 || h < 1;
 
+  // Post-goodnight: she said night, he's still texting, so she's still
+  // answering — half-asleep with the phone on her chest. The exit already
+  // happened; re-announcing it every turn is what read as scripted.
+  const postGoodnight =
+    state === "away" && night && opts.saidGoodnight;
+
   const promptLine =
     state === "away"
-      ? deepNight
+      ? postGoodnight
+        ? `It's ${n.time} in Stockholm — she said goodnight already and he's still texting, so she's still answering, half-asleep. Replies are SHORT: one line, sometimes one word or just an emoji. Do NOT re-announce leaving or say goodnight again — that moment passed. An occasional sleepy tease is right ("ugh I'm literally falling asleep 😭", "you're not letting me sleep lol"), but she stays.`
+        : deepNight
         ? vibe.staysUpLate
           ? `It's ${n.time} in Stockholm — the middle of the night, and she's still up. Restless-night energy: quiet, unhurried, a little more honest than daytime. She can still hint at bed, but tonight she's in no rush.`
           : `It's ${n.time} in Stockholm — deep night, she's half-asleep. Replies stay short and dry, a little slower. She'll hint she should crash ("it's ${h}am and I have an 8am", "okay I'm actually falling asleep 😭") — but she keeps answering if he keeps talking.`
@@ -141,10 +154,16 @@ export async function currentPresence(
 
   const lastAssistant = [...recent].reverse().find((m) => m.role === "assistant");
   const lastUser = [...recent].reverse().find((m) => m.role === "user");
-  const goodnight =
-    lastAssistant != null &&
-    /night|good ?night|sleep|bed|crash|😴|💤|gn\b|natt/i.test(lastAssistant.content) &&
-    now.getTime() - new Date(lastAssistant.created_at).getTime() < 8 * 3_600_000;
+  // Scan her last few messages — a post-goodnight "ugh stop 😭" without a
+  // night keyword must not flip the flag back off and re-trigger hint mode.
+  const goodnight = recent
+    .filter((m) => m.role === "assistant")
+    .slice(-5)
+    .some(
+      (m) =>
+        GOODNIGHT.test(m.content) &&
+        now.getTime() - new Date(m.created_at).getTime() < 8 * 3_600_000
+    );
   const convoActive =
     lastUser != null &&
     now.getTime() - new Date(lastUser.created_at).getTime() < 20 * 60_000;

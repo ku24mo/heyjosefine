@@ -14,7 +14,7 @@ import {
   semanticScoresFor,
 } from "@/lib/memory/retrieve";
 import { effectiveStatus } from "@/lib/persona/life";
-import { herPresence } from "@/lib/persona/presence";
+import { GOODNIGHT, herPresence } from "@/lib/persona/presence";
 import { stageForFamiliarity, type DisclosureTier } from "@/lib/persona/profile";
 import { herNow } from "@/lib/time";
 import {
@@ -81,14 +81,18 @@ function normalizeTapback(emoji: string | undefined | null): string | null {
   return TAPBACK_ALIASES[t.toLowerCase()] ?? null;
 }
 
-const GOODNIGHT = /\b(night|good ?night|sleep|bed|crash|gn\b|natt|😴|💤)\b/i;
-
-/** She said goodnight within the last ~8h — that's binding, not a hint. */
-function saidGoodnightRecently(recent: MessageRow[], now: Date = new Date()): boolean {
-  const last = [...recent].reverse().find((m) => m.role === "assistant");
-  if (!last) return false;
-  const ageH = (now.getTime() - new Date(last.created_at).getTime()) / 3_600_000;
-  return ageH < 8 && GOODNIGHT.test(last.content);
+/** She said goodnight within the last ~8h — that's binding, not a hint.
+ *  Scans her last few messages: a post-goodnight "ugh stop 😭" without a
+ *  night keyword must not flip the flag off and re-trigger the hint arc. */
+export function saidGoodnightRecently(recent: MessageRow[], now: Date = new Date()): boolean {
+  return recent
+    .filter((m) => m.role === "assistant")
+    .slice(-5)
+    .some(
+      (m) =>
+        GOODNIGHT.test(m.content) &&
+        (now.getTime() - new Date(m.created_at).getTime()) / 3_600_000 < 8
+    );
 }
 
 /**
@@ -140,10 +144,11 @@ export async function orchestrate(opts: {
   const convoActive =
     lastUserMsg != null &&
     now.getTime() - new Date(lastUserMsg.created_at).getTime() < 20 * 60_000;
+  const goodnight = saidGoodnightRecently(recent, now);
   const presence = herPresence({
     userId,
     hasHistory: recent.length > 0,
-    saidGoodnight: saidGoodnightRecently(recent, now),
+    saidGoodnight: goodnight,
     convoActive,
     now,
   });
@@ -407,8 +412,19 @@ export async function orchestrate(opts: {
       : 0;
 
   const herHour = herNow(now).hour;
+  const deepNight = herHour >= 1 && herHour < 7;
+  // Post-goodnight she answers slower — and since the client only stamps
+  // "Read" when her reply begins, the lag doubles as left-on-delivered.
   const awayPenaltyMs =
-    presence.state === "away" ? (herHour >= 1 && herHour < 7 ? 3000 : 1200) : 0;
+    presence.state !== "away"
+      ? 0
+      : goodnight
+        ? deepNight
+          ? 8_000
+          : 4_000
+        : deepNight
+          ? 3_000
+          : 1_200;
 
   return {
     bubbles: out.bubbles,

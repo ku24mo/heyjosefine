@@ -7,7 +7,9 @@ import {
   getRecentMessages,
 } from "@/lib/db/queries";
 import { currentDevelopment, effectiveStatus } from "@/lib/persona/life";
+import { GOODNIGHT } from "@/lib/persona/presence";
 import { stageForFamiliarity } from "@/lib/persona/profile";
+import { herNow } from "@/lib/time";
 import { getOrCreateState } from "@/lib/state/conversation";
 import type { LifeThreadRow, OpenLoopRow } from "@/lib/types";
 import type { ChatModel } from "./provider";
@@ -27,6 +29,7 @@ export type OpeningStrategy =
   | "playful"
   | "curiosity"
   | "first_hello"
+  | "morning_after"
   | "normal";
 
 export interface OpeningResult {
@@ -72,8 +75,15 @@ export async function generateOpening(opts: {
   const hoursSince =
     (Date.now() - new Date(lastMsg.created_at).getTime()) / 3_600_000;
 
-  // Already has an unread assistant opener? Don't double-open.
-  if (lastMsg.role === "assistant" && hoursSince < 24) return null;
+  // Already has an unread assistant opener? Don't double-open. A goodnight
+  // is exempt — it's a closer, not a hook awaiting his reply, so "morning
+  // after" can legitimately re-open the next day.
+  if (
+    lastMsg.role === "assistant" &&
+    hoursSince < 24 &&
+    !GOODNIGHT.test(lastMsg.content)
+  )
+    return null;
 
   // Too soon to act like she noticed they were gone.
   if (hoursSince < CONFIG.opening.minAbsenceHours) return null;
@@ -119,6 +129,20 @@ export async function generateOpening(opts: {
       strategy: "callback",
       reason: "emotional conversation ended recently",
       score: 40,
+    });
+  }
+
+  // He kept her up last night — the payoff of the declared goodnight.
+  if (
+    lastMsg.role === "assistant" &&
+    GOODNIGHT.test(lastMsg.content) &&
+    herNow().hour >= 7 &&
+    herNow().hour < 12
+  ) {
+    candidates.push({
+      strategy: "morning_after",
+      reason: "she declared sleep and he's back",
+      score: 50,
     });
   }
 
