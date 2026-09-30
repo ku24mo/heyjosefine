@@ -35,6 +35,7 @@ export const DEFAULT_STATE = (
   last_depth_date: null,
   first_met_at: new Date().toISOString(),
   last_interaction_at: null,
+  last_milestone_day: 0,
   turn_locked_at: null,
 });
 

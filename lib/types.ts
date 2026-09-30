@@ -104,6 +104,7 @@ export interface ConversationStateRow {
   last_depth_date: string | null;
   first_met_at: string;
   last_interaction_at: string | null;
+  last_milestone_day: number;
   turn_locked_at: string | null;
   updated_at: string;
 }

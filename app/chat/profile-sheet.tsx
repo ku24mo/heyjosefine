@@ -7,12 +7,27 @@ import { setSoundEnabled, soundEnabled } from "@/lib/sounds";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
 /** iOS-style contact sheet — profile header on top, settings below. */
+interface Relationship {
+  knownSince: string | null;
+  daysKnown: number;
+  stage: string;
+  messageTotal: number;
+}
+
+const STAGE_LABEL: Record<string, string> = {
+  new: "just met",
+  warming: "warming up",
+  familiar: "familiar",
+  close: "close",
+};
+
 export default function ProfileSheet(props: {
   open: boolean;
   onClose: () => void;
   statusLine: string;
   plan: "free" | "unlimited";
   anonymous: boolean;
+  relationship: Relationship | null;
   onClaim: () => void;
   onDeleted: () => void;
 }) {
@@ -26,6 +41,7 @@ function SheetInner({
   statusLine,
   plan,
   anonymous,
+  relationship,
   onClaim,
   onDeleted,
 }: {
@@ -33,6 +49,7 @@ function SheetInner({
   statusLine: string;
   plan: "free" | "unlimited";
   anonymous: boolean;
+  relationship: Relationship | null;
   onClaim: () => void;
   onDeleted: () => void;
 }) {
@@ -70,7 +87,7 @@ function SheetInner({
     await fetch("/api/account/delete", { method: "POST" });
     // Server deleted the auth user — the local session is dead; bounce home
     // (client bootstrap will mint a fresh guest session).
-    window.location.href = "/";
+    router.replace("/");
   }
 
   return (
@@ -89,6 +106,28 @@ function SheetInner({
           <div className="mt-2 text-center text-[13px] leading-snug text-neutral-600">
             22 · Stockholm · law student &amp; model
           </div>
+          {relationship?.knownSince && (
+            <div className="mt-3 w-full border-t border-neutral-200/60 pt-3 text-center">
+              <div className="text-[13px] text-neutral-600">
+                known each other since{" "}
+                {new Date(relationship.knownSince).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year:
+                    relationship.daysKnown >= 365 ? "numeric" : undefined,
+                })}
+                {" · "}
+                {relationship.daysKnown === 0
+                  ? "today"
+                  : `${relationship.daysKnown}d`}
+                {relationship.messageTotal > 0 &&
+                  ` · ${relationship.messageTotal >= 1000 ? `${(relationship.messageTotal / 1000).toFixed(1)}k` : relationship.messageTotal} msgs`}
+              </div>
+              <div className="mt-0.5 text-[11px] text-neutral-400">
+                {STAGE_LABEL[relationship.stage] ?? relationship.stage}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* premium */}

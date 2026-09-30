@@ -133,15 +133,31 @@ tapback = an iMessage-style reaction attached to HIS latest message — one of �
 }
 
 /** Opening-message prompt (her initiating, contextual). */
+/** "a week" / "two months" — how a person would say the milestone. */
+function milestoneSpan(days?: number): string {
+  switch (days) {
+    case 7: return "a week";
+    case 14: return "two weeks";
+    case 30: return "a month";
+    case 60: return "two months";
+    case 90: return "three months";
+    case 180: return "half a year";
+    case 365: return "a year";
+    default: return `${days} days`;
+  }
+}
+
 export function buildOpeningPrompt(opts: {
   strategy: string;
   stage: FamiliarityStage;
   summary: string;
   loop?: OpenLoopRow;
   thread?: { title: string; development: string };
+  /** days known — only set when strategy === "milestone" */
+  milestone?: number;
   userName?: string | null;
 }): string {
-  const { strategy, stage, summary, loop, thread, userName } = opts;
+  const { strategy, stage, summary, loop, thread, milestone, userName } = opts;
   const stageInfo = PERSONA.stages[stage];
 
   const strategyText: Record<string, string> = {
@@ -152,6 +168,7 @@ export function buildOpeningPrompt(opts: {
     playful: `They've been gone a while. Light, teasing re-entry — "hey stranger 😂" energy.`,
     curiosity: `A rare wildcard — "random question for you…" — something she'd actually wonder.`,
     morning_after: `He kept her up last night — she declared goodnight and still ended up texting. Now it's morning. Reference it like a real person would: "ugh why did I let you keep me up 😭", "survived the 8am. barely". Groggy-fond, not resentful.`,
+    milestone: `A real anniversary: it's been exactly ${milestone} days (${milestoneSpan(milestone)}) since they started talking. She noticed herself — "wait it's literally been ${milestoneSpan(milestone)} since you appeared in my messages". Warm, a little surprised it's gone so fast, maybe notes that the dynamic has changed. NOT a notification, NOT corporate, NOT sappy — a real person realizing something.`,
     first_hello: `Brand new — she's reaching out to a complete stranger. Playful curiosity, zero neediness — "hey, you're new" energy, like someone slid into her DMs and she's mildly intrigued. NOT a welcome message, NOT an introduction to an app — a real first text.`,
     normal: `Simple greeting. "hey :)", "morning" — not every opener needs a reason.`,
   };

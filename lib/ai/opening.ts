@@ -30,7 +30,25 @@ export type OpeningStrategy =
   | "curiosity"
   | "first_hello"
   | "morning_after"
+  | "milestone"
   | "normal";
+
+/** Relationship anniversaries she notices herself. */
+export const MILESTONE_DAYS = [7, 14, 30, 60, 90, 180, 365];
+
+/**
+ * Highest crossed-but-uncelebrated milestone. Only the biggest one fires —
+ * come back after 40 days and she marks the month, not the week too.
+ */
+export function nextMilestone(
+  daysKnown: number,
+  lastMilestoneDay: number
+): number | null {
+  const crossed = MILESTONE_DAYS.filter(
+    (d) => d <= daysKnown && d > lastMilestoneDay
+  );
+  return crossed.length ? crossed[crossed.length - 1] : null;
+}
 
 export interface OpeningResult {
   strategy: OpeningStrategy;
@@ -45,9 +63,10 @@ export async function generateOpening(opts: {
 }): Promise<OpeningResult | null> {
   const { supabase, model, userId } = opts;
 
-  const [state, conversation] = await Promise.all([
+  const [state, conversation, profile] = await Promise.all([
     getOrCreateState(supabase, userId),
     getOrCreateConversation(supabase, userId),
+    supabase.from("profiles").select("created_at").eq("id", userId).maybeSingle(),
   ]);
 
   // First visit = the product opens itself — a stranger texting him first.
@@ -96,7 +115,7 @@ export async function generateOpening(opts: {
   // ── Strategy selection ──────────────────────────────────────────────────────
   const now = Date.now();
   const cooldown = CONFIG.opening.nudgeCooldownHours * 3_600_000;
-  const candidates: { strategy: OpeningStrategy; reason: string; score: number; loop?: OpenLoopRow; thread?: LifeThreadRow }[] = [];
+  const candidates: { strategy: OpeningStrategy; reason: string; score: number; loop?: OpenLoopRow; thread?: LifeThreadRow; milestone?: number }[] = [];
 
   for (const l of loops.filter((l) => l.status === "active")) {
     if (l.last_nudged_at && now - new Date(l.last_nudged_at).getTime() < cooldown)
@@ -146,6 +165,22 @@ export async function generateOpening(opts: {
     });
   }
 
+  // Anniversary — she notices it herself. profiles.created_at survives both
+  // conversation resets and the guest→claim conversion (same user_id).
+  const knownSince = profile.data?.created_at ?? state.first_met_at;
+  const daysKnown = Math.floor(
+    (now - new Date(knownSince).getTime()) / 86_400_000
+  );
+  const milestone = nextMilestone(daysKnown, state.last_milestone_day ?? 0);
+  if (milestone) {
+    candidates.push({
+      strategy: "milestone",
+      reason: `${milestone} days known`,
+      score: 60,
+      milestone,
+    });
+  }
+
   if (hoursSince > 48) {
     candidates.push({ strategy: "playful", reason: "long absence", score: 20 });
   }
@@ -163,6 +198,7 @@ export async function generateOpening(opts: {
     stage,
     summary: state.summary,
     loop: chosen.loop,
+    milestone: chosen.milestone,
     thread: chosen.thread
       ? { title: chosen.thread.title, development: currentDevelopment(chosen.thread)! }
       : undefined,
@@ -180,6 +216,15 @@ export async function generateOpening(opts: {
       .from("open_loops")
       .update({ last_nudged_at: new Date().toISOString() })
       .eq("id", chosen.loop.id);
+  }
+
+  // Celebrate each milestone exactly once. Fail-soft: a missing column
+  // pre-migration just means it may fire again — never a crash.
+  if (chosen.milestone) {
+    await supabase
+      .from("conversation_state")
+      .update({ last_milestone_day: chosen.milestone })
+      .eq("user_id", userId);
   }
 
   return {

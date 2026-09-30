@@ -39,6 +39,12 @@ export default function ChatClient() {
   const [now, setNow] = useState(() => Date.now());
   const [sheetOpen, setSheetOpen] = useState(false);
   const [plan, setPlan] = useState<"free" | "unlimited">("free");
+  const [relationship, setRelationship] = useState<{
+    knownSince: string | null;
+    daysKnown: number;
+    stage: string;
+    messageTotal: number;
+  } | null>(null);
   /** Anonymous guest vs claimed account — gates the claim wall + sheet rows. */
   const [anonymous, setAnonymous] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
@@ -121,9 +127,10 @@ export default function ChatClient() {
   const loadHistory = useCallback(async () => {
     const res = await fetch("/api/history");
     if (res.ok) {
-      const { messages, plan: p } = await res.json();
+      const { messages, plan: p, relationship } = await res.json();
       setMessages(messages);
       if (p) setPlan(p);
+      if (relationship) setRelationship(relationship);
       const lastHer = [...messages].reverse().find((m: Bubble) => m.role === "assistant");
       if (lastHer?.created_at) setLastSeenAt(lastHer.created_at);
     }
@@ -336,6 +343,7 @@ export default function ChatClient() {
         onClose={() => setSheetOpen(false)}
         statusLine={statusText}
         plan={plan}
+        relationship={relationship}
         anonymous={anonymous}
         onClaim={() => {
           setSheetOpen(false);
