@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/billing/stripe";
+import { applySubscriptionToProfile } from "@/lib/billing/sync";
 import { createServiceSupabase } from "@/lib/supabase/server";
 
 /**
@@ -43,25 +44,12 @@ export async function POST(request: Request) {
     event.type === "customer.subscription.deleted"
   ) {
     const sub = event.data.object as Stripe.Subscription;
-    const active =
-      event.type !== "customer.subscription.deleted" &&
-      (sub.status === "active" || sub.status === "trialing");
-    // Newer Stripe APIs moved period end onto subscription items.
-    const periodEnd =
-      (sub as unknown as { current_period_end?: number }).current_period_end ??
-      sub.items.data[0]?.current_period_end;
-
-    await supabase
-      .from("profiles")
-      .update({
-        plan: active ? "unlimited" : "free",
-        stripe_subscription_id: sub.id,
-        subscription_status: sub.status,
-        current_period_end: periodEnd
-          ? new Date(periodEnd * 1000).toISOString()
-          : null,
-      })
-      .eq("stripe_customer_id", String(sub.customer));
+    await applySubscriptionToProfile(
+      supabase,
+      getStripe(),
+      sub,
+      event.type === "customer.subscription.deleted"
+    );
   }
 
   return NextResponse.json({ received: true });

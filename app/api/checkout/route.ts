@@ -31,6 +31,9 @@ export async function POST() {
     customer_email: profile?.stripe_customer_id ? undefined : user.email ?? undefined,
     client_reference_id: user.id,
     metadata: { user_id: user.id },
+    // Every subscription event carries the user id itself — webhooks must not
+    // depend on checkout.session.completed having written stripe_customer_id.
+    subscription_data: { metadata: { user_id: user.id } },
     success_url: `${appUrl()}/chat`,
     cancel_url: `${appUrl()}/paywall`,
   });
