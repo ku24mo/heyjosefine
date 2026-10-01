@@ -83,16 +83,16 @@ export default function AboutClient() {
             {herDay}
           </p>
         )}
+        <p className="dusk-fade-slower mt-8 max-w-[280px] text-[13px] leading-relaxed text-white/50">
+          she remembers what you told her last tuesday. sometimes she texts
+          first.
+        </p>
         <Link
           href="/"
-          className="dusk-fade-slower mt-14 rounded-full border border-white/25 bg-white/10 px-8 py-3 text-sm tracking-wide backdrop-blur-sm transition-colors hover:bg-white/20"
+          className="dusk-fade-slower mt-10 rounded-full border border-white/25 bg-white/10 px-8 py-3 text-sm tracking-wide backdrop-blur-sm transition-colors hover:bg-white/20"
         >
           text her →
         </Link>
-        <p className="dusk-fade-slower mt-10 max-w-[280px] text-[13px] leading-relaxed text-white/50">
-          she has a lecture at 8 and a dog who steals socks. she remembers what
-          you told her last tuesday. sometimes she texts first.
-        </p>
       </main>
 
       <footer className="absolute bottom-6 z-10 flex items-center gap-3 text-[11px] text-white/40">
