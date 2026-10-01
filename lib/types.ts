@@ -19,6 +19,8 @@ export interface MessageMeta {
   beat?: Beat;
   /** iMessage-style tapback she attached to this message (emoji) */
   tapback?: string;
+  /** In-conversation double-text she sent after he went quiet */
+  nudge?: boolean;
   /** A photo she sent — resolved CDN url + what it depicts. */
   media?: { url: string; subject: string; scene?: string | null };
 }

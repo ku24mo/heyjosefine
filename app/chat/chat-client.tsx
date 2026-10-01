@@ -196,6 +196,31 @@ export default function ChatClient() {
     }
   }, [revealBubbles, scrollToBottom]);
 
+  // In-conversation nudge — if he went quiet mid-flow, she may double-text.
+  // The server gate decides; this just asks.
+  const tryNudge = useCallback(async () => {
+    if (document.hidden) return;
+    const res = await fetch("/api/nudge").catch(() => null);
+    if (res?.ok) {
+      const { bubbles } = await res.json();
+      if (bubbles?.length) {
+        setTyping(true);
+        scrollToBottom();
+        await revealBubbles(bubbles);
+      }
+    }
+  }, [revealBubbles, scrollToBottom]);
+
+  useEffect(() => {
+    const iv = setInterval(tryNudge, 60_000);
+    const onFocus = () => void tryNudge();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [tryNudge]);
+
   // Bootstrap: no session → mint an anonymous guest, then load normally.
   // Guests reach chat unauthenticated by design — the session is created
   // lazily here, not in the proxy, so crawlers never mint user rows.

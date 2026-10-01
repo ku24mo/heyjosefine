@@ -44,6 +44,16 @@ export const CONFIG = {
     maxOpenersConsidered: 5,
   },
 
+  // In-conversation nudge — she double-texts when HE goes quiet mid-flow.
+  // The gate is the taste layer: all timing/caps live here.
+  nudge: {
+    minQuietMin: 8, // under this = impatient
+    maxQuietMin: 45, // over this = he's gone → opening engine's job
+    dailyCap: 3, // nudges per 24h
+    fireProbPerPoll: 0.3, // eligible ≠ always fires — organic timing
+    activeUserMsgsMin: 2, // user msgs in the last hour = he was actually there
+  },
+
   // LLM call bounds — a hung provider call can't hold the turn lock forever.
   llm: {
     timeoutMs: 45_000, // abort each model call after this
