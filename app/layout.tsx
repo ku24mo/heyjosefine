@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   ),
   title: "josefine",
   description:
-    "she has a lecture at 8 and a dog who steals socks. she remembers what you told her last tuesday. sometimes she texts first.",
+    "she remembers what you told her last tuesday. sometimes she texts first.",
   openGraph: {
     title: "josefine",
     description: "she remembers you.",

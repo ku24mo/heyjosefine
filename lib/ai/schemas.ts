@@ -218,6 +218,18 @@ const herCommitmentSchema = z.object({
   content: z.string().min(3),
 });
 
+/** Something he recommended that SHE committed to (or declined) in her reply. */
+const herRequestSchema = z.object({
+  kind: z.enum(["watch", "read", "listen", "try", "play", "other"]),
+  title: z.string().min(2),
+  detail: z.string().nullable().default(null),
+  outcome: z.enum(["accepted", "countered", "declined"]),
+  /** believable total runtime — movie ~120, episode ~45, season ~480, album ~45, book ~600 */
+  est_minutes: z.number(),
+  /** countered only — the day she said she'd actually start */
+  day_hint: z.string().nullable().default(null),
+});
+
 /** Post-turn extraction (async — never blocks the reply). */
 export const extractionSchema = z.object({
   conversation_summary: z
@@ -226,6 +238,7 @@ export const extractionSchema = z.object({
   new_memories: lenientArray(newMemorySchema).default([]),
   her_episodes: lenientArray(herEpisodeSchema).default([]),
   her_commitments: lenientArray(herCommitmentSchema).default([]),
+  her_requests: lenientArray(herRequestSchema).default([]),
   memory_updates: lenientArray(memoryUpdateSchema).default([]),
   open_loop_updates: lenientArray(openLoopUpdateSchema).default([]),
 });

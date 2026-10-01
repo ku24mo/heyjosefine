@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CONFIG } from "@/lib/config";
-import { getOrCreateConversation, getRecentMessages } from "@/lib/db/queries";
+import { getHerRequests, getOrCreateConversation, getRecentMessages } from "@/lib/db/queries";
 import { getOrCreateState } from "@/lib/state/conversation";
 import { canInitiate, GOODNIGHT } from "@/lib/persona/presence";
+import { dueBeat, markBeatSent, normalizeTitle } from "@/lib/persona/requests";
 import { stageForFamiliarity } from "@/lib/persona/profile";
 import type { MessageRow } from "@/lib/types";
 import type { ChatModel } from "./provider";
@@ -110,14 +111,36 @@ export async function generateNudge(opts: {
   window: NudgeWindow;
 }): Promise<NudgeResult | null> {
   const { supabase, model, userId, recent, window } = opts;
-  const state = await getOrCreateState(supabase, userId);
+  const [state, requests] = await Promise.all([
+    getOrCreateState(supabase, userId),
+    getHerRequests(supabase, userId),
+  ]);
   const stage = stageForFamiliarity(state.familiarity);
+
+  // A pending report is prime nudge material — "ok wait i finished dune" is
+  // exactly the kind of realized thought that brings someone back.
+  const pending = requests
+    .map((r) => ({ r, beat: dueBeat(r) }))
+    .find((x) => x.beat != null);
 
   const prompt = buildNudgePrompt({
     stage,
     summary: state.summary ?? "",
     minutesQuiet: window.minutesQuiet,
     herLastWasQuestion: window.herLastWasQuestion,
+    requestBeat: pending
+      ? {
+          title: pending.r.title,
+          note:
+            pending.beat === "done"
+              ? "finished it"
+              : pending.beat === "dropped"
+                ? "gave up on it"
+                : pending.beat === "mid"
+                  ? "are about halfway through"
+                  : "just started it",
+        }
+      : null,
   });
 
   // Recent context as it actually looked — media shows as markers, not blanks.
@@ -138,7 +161,14 @@ export async function generateNudge(opts: {
   });
 
   const bubbles = out.bubbles.slice(0, 2); // a nudge is a bubble, not a burst
-  return bubbles.length ? { bubbles, window } : null;
+  if (!bubbles.length) return null;
+
+  // If the nudge actually reported the pending beat, the report happened —
+  // mark it sent so the opening engine doesn't re-report it.
+  if (pending?.beat && bubbles.join(" ").toLowerCase().includes(normalizeTitle(pending.r.title))) {
+    await markBeatSent(supabase, pending.r, pending.beat).catch(() => {});
+  }
+  return { bubbles, window };
 }
 
 /** Route helper — load, gate, generate. Null = stay quiet. */

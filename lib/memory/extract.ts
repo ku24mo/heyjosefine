@@ -5,6 +5,8 @@ import { extractionSchema } from "@/lib/ai/schemas";
 import type { MemoryRow, OpenLoopRow } from "@/lib/types";
 import { dedupeNewEpisodes, dedupeNewMemories } from "./dedupe";
 import { resolveDayHint } from "@/lib/persona/day";
+import { clampEst } from "@/lib/persona/requests";
+import { CONFIG } from "@/lib/config";
 import { semanticScoresFor } from "./retrieve";
 
 /**
@@ -43,6 +45,13 @@ HER EPISODES — what the ASSISTANT told the user about her own life:
 HER COMMITMENTS — dated plans she stated out loud:
 - Only when she committed to a specific day: "shoot tomorrow" → {"day_hint":"tomorrow",...}, "exam friday" → {"day_hint":"friday",...}. Vague "sometime this week" → don't store.
 - These become her actual schedule — only emit things she really said, not user guesses.
+
+HER REQUESTS — things the user recommended that SHE responded to:
+- Only when HER reply actually committed or refused. "maybe lol", "i'll think about it", or ignoring it → store nothing.
+- accepted: "ok i'll watch it tonight" → outcome accepted, est_minutes = believable total runtime (movie ~120, one episode ~45, a season ~480, album ~45, book ~600, game ~900).
+- countered: she said yes but to a later day → outcome countered + day_hint.
+- declined: she explicitly passed → outcome declined (keeps future refusals consistent).
+- kind: watch|read|listen|try|play|other. title = the thing's name, no verb ("money heist", not "watch money heist").
 
 CONVERSATION SUMMARY — 1-3 sentences on what is happening RIGHT NOW (topic, user's state, where it's heading). This is separate from memories: summary = current situation, memory = durable facts.
 
@@ -235,6 +244,58 @@ export async function extractAndStore(opts: {
       user_id: userId,
       target_day: day,
       content: c.content,
+    });
+  }
+
+  // ── her requests — recommendations she committed to, paced like a person ──
+  // Dedupe by normalized title; a re-accepted declined request revives.
+  for (const req of out.her_requests.slice(0, 1)) {
+    const title = req.title.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+    if (!title) continue;
+    const { data: dup } = await supabase
+      .from("her_requests")
+      .select("id, status")
+      .eq("user_id", userId)
+      .ilike("title", title)
+      .maybeSingle();
+    if (req.outcome === "declined") {
+      if (!dup) {
+        await supabase.from("her_requests").insert({
+          user_id: userId,
+          kind: req.kind,
+          title,
+          detail: req.detail,
+          est_minutes: clampEst(req.kind, req.est_minutes),
+          status: "declined",
+        });
+      }
+      continue;
+    }
+    const startDay = resolveDayHint(req.day_hint);
+    if (dup) {
+      // He re-recommended something she passed on and she took it this time.
+      if (dup.status === "declined") {
+        await supabase
+          .from("her_requests")
+          .update({
+            status: "doing",
+            accepted_at: new Date().toISOString(),
+            start_day: startDay,
+            beats_sent: [],
+          })
+          .eq("id", dup.id);
+      }
+      continue;
+    }
+    await supabase.from("her_requests").insert({
+      user_id: userId,
+      kind: req.kind,
+      title,
+      detail: req.detail,
+      est_minutes: clampEst(req.kind, req.est_minutes),
+      pace: 0.7 + Math.random() * 0.6,
+      will_drop: Math.random() < CONFIG.requests.dropChance,
+      start_day: startDay,
     });
   }
 

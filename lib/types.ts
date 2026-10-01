@@ -153,6 +153,29 @@ export interface LifeThreadStateRow {
   awareness_stage: number;
 }
 
+// ── Her requests — things he recommended that she committed to ────────────────
+
+export type RequestKind = "watch" | "read" | "listen" | "try" | "play" | "other";
+export type RequestBeat = "started" | "mid" | "done" | "dropped";
+export type RequestStatus = "doing" | "done" | "dropped" | "declined";
+
+export interface HerRequestRow {
+  id: string;
+  user_id: string;
+  kind: RequestKind;
+  title: string;
+  detail: string | null;
+  est_minutes: number;
+  pace: number;
+  will_drop: boolean;
+  status: RequestStatus;
+  beats_sent: RequestBeat[];
+  start_day: string | null; // Stockholm date she countered to, else null
+  accepted_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Orchestrator domain ─────────────────────────────────────────────────────
 
 export type Act =

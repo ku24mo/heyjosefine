@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CONFIG } from "@/lib/config";
 import type {
+  HerRequestRow,
   LifeThreadRow,
   LifeThreadStateRow,
   MemoryRow,
@@ -118,6 +120,28 @@ export async function getLifeThreads(
     .order("seeded_at", { ascending: false })
     .limit(10);
   return (data ?? []) as LifeThreadRow[];
+}
+
+/**
+ * Her queue — requests he's made that she took on (or declined). Active rows
+ * plus terminal ones still inside the callback window; declines never expire
+ * from context (a "no" stays a "no").
+ */
+export async function getHerRequests(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<HerRequestRow[]> {
+  const cutoff = new Date(
+    Date.now() - CONFIG.requests.reportableWindowDays * 86_400_000
+  ).toISOString();
+  const { data } = await supabase
+    .from("her_requests")
+    .select("*")
+    .eq("user_id", userId)
+    .or(`status.eq.doing,status.eq.declined,updated_at.gte.${cutoff}`)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  return (data ?? []) as HerRequestRow[];
 }
 
 export async function getLifeThreadStates(

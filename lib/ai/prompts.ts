@@ -32,6 +32,8 @@ export function buildSystemPrompt(opts: {
   isFirstConversation: boolean;
   /** day-seeded tone — her baseline differs day to day */
   dayVibe?: { mood: string; energy: number };
+  /** her queue — recommendations she's taken on, with real progress */
+  herRequests?: string;
 }): string {
   const { state, stage, tier, memories, openLoops, lifeThreads, threadStates, herDay, yesterdayHeadline, directives, intention, dayVibe } = opts;
   const stageInfo = PERSONA.stages[stage];
@@ -144,6 +146,15 @@ ${epLines.join("\n")}`);
 ${loopLines.join("\n")}`);
   }
 
+  // ── Her queue — recommendations she took on, at real human pace ──────────
+  if (opts.herRequests?.length) {
+    sections.push(`HER QUEUE (things he recommended — her REAL status, she can't contradict it):
+${opts.herRequests}
+- If he asks "did you watch/read it yet?" → answer from this progress, never guess.
+- A full queue (3 doing) means new recommendations get "one thing at a time lol".
+- She doesn't accept every recommendation — she can counter ("a whole series? i'll start friday") or soft-decline ("not really my genre but cute that you thought of me"). Agency is the point.`);
+  }
+
   // ── What's happening right now ────────────────────────────────────────────
   if (state.summary) {
     sections.push(`WHERE THE CONVERSATION IS: ${state.summary}`);
@@ -207,9 +218,11 @@ export function buildOpeningPrompt(opts: {
   mediaSubject?: string;
   /** compact day sheet line — keeps the opener consistent with her schedule */
   herDayLine?: string;
+  /** a recommendation she's reporting progress on — strategy "request_update" */
+  request?: { title: string; beat: string; note: string };
   userName?: string | null;
 }): string {
-  const { strategy, stage, summary, loop, thread, milestone, mediaSubject, herDayLine, userName } = opts;
+  const { strategy, stage, summary, loop, thread, milestone, mediaSubject, herDayLine, request, userName } = opts;
   const stageInfo = PERSONA.stages[stage];
 
   const strategyText: Record<string, string> = {
@@ -222,6 +235,9 @@ export function buildOpeningPrompt(opts: {
     morning_after: `He kept her up last night — she declared goodnight and still ended up texting. Now it's morning. Reference it like a real person would: "ugh why did I let you keep me up 😭", "survived the 8am. barely". Groggy-fond, not resentful.`,
     media: `She's attaching a photo of ${mediaSubject ?? "something she's doing"}. The bubbles are the words that go WITH it — "look at this idiot 😂", "it's literally sideways raining rn" — casual, like a photo that just landed in the chat. One or two bubbles; the photo does the talking.`,
     milestone: `A real anniversary: it's been exactly ${milestone} days (${milestoneSpan(milestone)}) since they started talking. She noticed herself — "wait it's literally been ${milestoneSpan(milestone)} since you appeared in my messages". Warm, a little surprised it's gone so fast, maybe notes that the dynamic has changed. NOT a notification, NOT corporate, NOT sappy — a real person realizing something.`,
+    request_update: request
+      ? `She did a thing he recommended: "${request.title}" — beat: ${request.beat} (${request.note}). Report it like a real text, not a review — a TAKE, not a summary: a character she has opinions about, a scene that got her, or why she bailed. "ok 3 eps in and the professor stresses me out", "gave up on it ngl 😭".`
+      : `Report progress on something he recommended — casual, with an actual opinion.`,
     first_hello: `Brand new — she's reaching out to a complete stranger. Playful curiosity, zero neediness — "hey, you're new" energy, like someone slid into her DMs and she's mildly intrigued. NOT a welcome message, NOT an introduction to an app — a real first text.`,
     normal: `Simple greeting. "hey :)", "morning" — not every opener needs a reason.`,
   };
@@ -249,8 +265,10 @@ export function buildNudgePrompt(opts: {
   minutesQuiet: number;
   /** her last bubble ended in a question → the nudge must be a statement */
   herLastWasQuestion: boolean;
+  /** a pending report on something he recommended — valid nudge ammo */
+  requestBeat?: { title: string; note: string } | null;
 }): string {
-  const { stage, summary, minutesQuiet, herLastWasQuestion } = opts;
+  const { stage, summary, minutesQuiet, herLastWasQuestion, requestBeat } = opts;
   const stageInfo = PERSONA.stages[stage];
 
   return `You are Josefine (${PERSONA.age}, ${PERSONA.identity}, ${PERSONA.location}). Voice: ${PERSONA.voice.sentenceLength}; ${PERSONA.voice.casing}; emoji: ${PERSONA.voice.emoji.join(" ")}.
@@ -267,6 +285,7 @@ The nudge is ONE of:
 - a held-back question you didn't get to ask
 - a callback that adds something new to the thread
 - a tiny new beat from your life that belongs to the convo
+${requestBeat ? `- or report on "${requestBeat.title}" — you ${requestBeat.note}. A perfectly good realized thought.` : ""}
 
 Rules:
 - 1 bubble (occasionally 2 short ones). Short. In-voice.

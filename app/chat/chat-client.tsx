@@ -185,7 +185,12 @@ export default function ChatClient() {
   }, []);
 
   const tryOpening = useCallback(async () => {
-    const open = await fetch("/api/opening");
+    const open = await fetch("/api/opening", {
+      headers: {
+        // his clock — groundwork for shared activities ("8pm your time")
+        "x-user-tz": Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+    });
     if (open.ok) {
       const { bubbles, media } = await open.json();
       if (bubbles?.length || media) {

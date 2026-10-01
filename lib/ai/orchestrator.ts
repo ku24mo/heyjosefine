@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { CONFIG } from "@/lib/config";
 import {
   getActiveMemories,
+  getHerRequests,
   getLifeThreads,
   getLifeThreadStates,
   getOpenLoops,
@@ -16,6 +17,12 @@ import {
 } from "@/lib/memory/retrieve";
 import { pickMedia, recordMediaSend } from "@/lib/media/pick";
 import { getHerDayContext } from "@/lib/persona/day";
+import {
+  dueBeat,
+  formatForPrompt as formatRequests,
+  markBeatSent,
+  normalizeTitle,
+} from "@/lib/persona/requests";
 import { currentDevelopmentIndex, effectiveStatus } from "@/lib/persona/life";
 import { GOODNIGHT, herPresence } from "@/lib/persona/presence";
 import { stageForFamiliarity, type DisclosureTier } from "@/lib/persona/profile";
@@ -135,7 +142,7 @@ export async function orchestrate(opts: {
 
   // ── 1. Load context ───────────────────────────────────────────────────────
   const conversation = await getOrCreateConversation(supabase, userId);
-  const [recent, allMemories, openLoops, state, semanticScores, profile, threadStates, dayCtx] =
+  const [recent, allMemories, openLoops, state, semanticScores, profile, threadStates, dayCtx, herRequests] =
     await Promise.all([
       getRecentMessages(supabase, conversation.id, CONFIG.rhythm.recentMessageWindow),
       getActiveMemories(supabase, userId),
@@ -145,6 +152,7 @@ export async function orchestrate(opts: {
       supabase.from("profiles").select("created_at").eq("id", userId).maybeSingle(),
       getLifeThreadStates(supabase, userId),
       getHerDayContext(model, now),
+      getHerRequests(supabase, userId),
     ]);
   const daysKnown = profile.data?.created_at
     ? Math.floor(
@@ -226,6 +234,7 @@ export async function orchestrate(opts: {
     intention,
     isFirstConversation: recent.length === 0,
     dayVibe: presence.vibe,
+    herRequests: formatRequests(herRequests, now) || undefined,
   });
 
   const messages: ChatMessage[] = [
@@ -370,6 +379,19 @@ export async function orchestrate(opts: {
       .update({ meta: { ...userMsgRow.meta, tapback: tbEmoji } })
       .eq("id", userMsgRow.id);
     tapback = { emoji: tbEmoji, messageId: userMsgRow.id };
+  }
+
+  // ── 6c. Her queue — she may have just reported a pending beat in-flow. ───
+  // If her bubbles name a title with an unreported beat, the report happened
+  // (this turn is it) — mark sent so the opening engine doesn't re-report.
+  const herText = normalizeTitle(out.bubbles.join(" "));
+  for (const r of herRequests) {
+    const beat = dueBeat(r, now);
+    if (beat && herText.includes(normalizeTitle(r.title))) {
+      await markBeatSent(supabase, r, beat, now).catch(() => {});
+      r.beats_sent = [...r.beats_sent, beat]; // keep the local row honest
+      if (beat === "done" || beat === "dropped") r.status = beat;
+    }
   }
 
   // ── 7. State update ───────────────────────────────────────────────────────

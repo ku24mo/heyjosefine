@@ -19,7 +19,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 export const maxDuration = 60;
 
 /** Called once when the chat screen mounts — may return a proactive opener. */
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createServerSupabase();
   const {
     data: { user },
@@ -27,6 +27,16 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   await ensureProfile(supabase, user.id);
+
+  // Stash his IANA timezone — groundwork for shared activities ("8pm your
+  // time" needs a real zone to negotiate against her Stockholm clock).
+  const userTz = request.headers.get("x-user-tz");
+  if (userTz && /^[A-Za-z_]+\/[A-Za-z_]+/.test(userTz)) {
+    await supabase
+      .from("profiles")
+      .update({ user_tz: userTz.slice(0, 64) })
+      .eq("id", user.id);
+  }
 
   // Dead-night hours — she doesn't start conversations at 3am. Exception:
   // a first visit always gets an opener (the product opens itself); an

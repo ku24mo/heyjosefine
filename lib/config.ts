@@ -83,6 +83,35 @@ export const CONFIG = {
     dayMaxSlots: 6,
   },
 
+  // Her requests — recommendations she takes on, paced like a real person.
+  requests: {
+    maxActive: 3, // queue overflow → she says "one thing at a time"
+    // believable minutes consumed per weekday per kind (weekend × mult)
+    dailyMinutes: {
+      watch: 110, // ~2 eps or most of a movie
+      read: 55,   // she's a student — reading for fun is slow
+      listen: 50, // an album fits in an evening
+      try: 80,    // a recipe, a game trial
+      play: 90,
+      other: 60,
+    },
+    weekendMult: 1.6,
+    firstDayShare: 0.6, // acceptance day is evening-only
+    dropChance: 0.1,    // ~1 in 10 things she quits — authenticity
+    dropAtFraction: 0.55, // she drops partway, not at the credits
+    midAtFraction: 0.5,
+    reportableWindowDays: 14, // done/dropped rows stay callback-able this long
+    // sanity clamps per kind — model estimates get fenced to believable ranges
+    estClamp: {
+      watch: [40, 1500],   // short film → a few seasons
+      read: [120, 2000],
+      listen: [10, 600],
+      try: [30, 600],
+      play: [60, 3000],
+      other: [30, 900],
+    },
+  },
+
   // Mood momentum
   mood: {
     decayPerTurn: 0.15, // drifts toward baseline each exchange

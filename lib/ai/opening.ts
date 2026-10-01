@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CONFIG } from "@/lib/config";
 import {
+  getHerRequests,
   getLifeThreads,
   getOpenLoops,
   getOrCreateConversation,
@@ -8,12 +9,13 @@ import {
 } from "@/lib/db/queries";
 import { pickMedia, type PickedMedia } from "@/lib/media/pick";
 import { dayLine, getHerDayContext, slotNow, slotToSubjects } from "@/lib/persona/day";
+import { dueBeat, markBeatSent } from "@/lib/persona/requests";
 import { currentDevelopment, currentDevelopmentIndex, effectiveStatus } from "@/lib/persona/life";
 import { GOODNIGHT } from "@/lib/persona/presence";
 import { stageForFamiliarity } from "@/lib/persona/profile";
 import { herNow } from "@/lib/time";
 import { getOrCreateState } from "@/lib/state/conversation";
-import type { LifeThreadRow, OpenLoopRow } from "@/lib/types";
+import type { HerRequestRow, LifeThreadRow, OpenLoopRow, RequestBeat } from "@/lib/types";
 import type { ChatModel } from "./provider";
 import { buildOpeningPrompt } from "./prompts";
 import { openingSchema } from "./schemas";
@@ -34,6 +36,7 @@ export type OpeningStrategy =
   | "morning_after"
   | "milestone"
   | "media"
+  | "request_update"
   | "normal";
 
 /** Relationship anniversaries she notices herself. */
@@ -121,7 +124,7 @@ export async function generateOpening(opts: {
   // ── Strategy selection ──────────────────────────────────────────────────────
   const now = Date.now();
   const cooldown = CONFIG.opening.nudgeCooldownHours * 3_600_000;
-  const candidates: { strategy: OpeningStrategy; reason: string; score: number; loop?: OpenLoopRow; thread?: LifeThreadRow; milestone?: number; media?: PickedMedia }[] = [];
+  const candidates: { strategy: OpeningStrategy; reason: string; score: number; loop?: OpenLoopRow; thread?: LifeThreadRow; milestone?: number; media?: PickedMedia; request?: { row: HerRequestRow; beat: RequestBeat } }[] = [];
 
   for (const l of loops.filter((l) => l.status === "active")) {
     if (l.last_nudged_at && now - new Date(l.last_nudged_at).getTime() < cooldown)
@@ -217,6 +220,20 @@ export async function generateOpening(opts: {
     }
   }
 
+  // Her queue — a report beat came due while he was away. "finished it last
+  // night, we need to talk about tokyo" is the strongest re-entry she has.
+  for (const r of await getHerRequests(supabase, userId)) {
+    const beat = dueBeat(r);
+    if (!beat) continue;
+    candidates.push({
+      strategy: "request_update",
+      reason: `${r.title}: ${beat} due`,
+      score: beat === "done" || beat === "dropped" ? 55 : 38,
+      request: { row: r, beat },
+    });
+    break; // one report per opening — real people lead with one thing
+  }
+
   if (hoursSince > 48) {
     candidates.push({ strategy: "playful", reason: "long absence", score: 20 });
   }
@@ -229,6 +246,13 @@ export async function generateOpening(opts: {
       : { strategy: "normal" as const, reason: "no specific reason", score: 0 });
 
   // ── Generate ────────────────────────────────────────────────────────────────
+  const BEAT_NOTES: Record<RequestBeat, string> = {
+    started: "just started it",
+    mid: "about halfway through",
+    done: "finished it",
+    dropped: "gave up on it partway",
+  };
+
   const prompt = buildOpeningPrompt({
     strategy: chosen.strategy,
     stage,
@@ -236,6 +260,13 @@ export async function generateOpening(opts: {
     loop: chosen.loop,
     milestone: chosen.milestone,
     herDayLine: dayLine(dayCtx.day),
+    request: chosen.request
+      ? {
+          title: chosen.request.row.title,
+          beat: chosen.request.beat,
+          note: BEAT_NOTES[chosen.request.beat],
+        }
+      : undefined,
     mediaSubject:
       chosen.strategy === "media" ? chosen.media?.asset.subject : undefined,
     thread: chosen.thread
@@ -248,6 +279,13 @@ export async function generateOpening(opts: {
     temperature: 0.9,
     messages: [{ role: "system", content: prompt }],
   });
+
+  // The opener IS the report — mark the beat sent (and lock terminal status).
+  if (chosen.request) {
+    await markBeatSent(supabase, chosen.request.row, chosen.request.beat).catch(
+      () => {}
+    );
+  }
 
   // Mark the loop as nudged so we don't re-poke about it.
   if (chosen.loop) {
