@@ -53,6 +53,27 @@ export async function POST(request: Request) {
   // Crisis screen — responds in-voice but with real-world resources,
   // before the model sees it. Still logged + counted by the gate.
   if (isCrisisMessage(message)) {
+    // Persist both sides — the worst continuity failure is her having no
+    // memory that this conversation happened tomorrow.
+    try {
+      const conversation = await getOrCreateConversation(supabase, user.id);
+      await insertMessage(supabase, {
+        conversation_id: conversation.id,
+        role: "user",
+        content: message,
+      });
+      for (const [i, bubble] of CRISIS_RESPONSE.entries()) {
+        await insertMessage(supabase, {
+          conversation_id: conversation.id,
+          role: "assistant",
+          content: bubble,
+          meta: { bubble_index: i, crisis: true },
+        });
+      }
+    } catch (e) {
+      // Persistence failing must never block the crisis response itself.
+      console.error("[/api/chat] failed to persist crisis exchange:", e);
+    }
     return NextResponse.json({ bubbles: CRISIS_RESPONSE, crisis: true });
   }
 

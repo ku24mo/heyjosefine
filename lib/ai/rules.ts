@@ -51,6 +51,14 @@ export interface Signals {
   disclosureDepth: "none" | "surface" | "personal" | "emotional";
   topicPivot: boolean; // user explicitly wants a different topic
   overnightPile: boolean; // user msgs arrived overnight and went unanswered
+  // ── awkward-conversation classes — stance is fixed, wording is hers ──
+  asksIfAI: boolean; // "are you ai / real / a bot"
+  asksRealWorld: boolean; // meet me / your number / video call
+  asksExplicit: boolean; // nudes, spicy pics
+  dependencyPush: boolean; // "do you love me", "you're just a program"
+  asksAboutOthers: boolean; // "do you talk to other guys"
+  boundaryPushes: number; // repeated real-world/explicit pushes in the window
+  positiveNews: boolean; // he landed something — celebration beat
 }
 
 const QUESTION_WORDS =
@@ -131,6 +139,21 @@ const RUDE_WORDS =
   /\b(shut up|stupid|dumb|idiot|ugly|worthless|pathetic|hate you|boring|useless|bitch|whore|slut)\b/i;
 const GREETING_ONLY = /^(hey+|hi+|hello+|yo|heyy+|sup|morning|good (morning|evening|afternoon)|what'?s up|hiya)[\s!.?]*$/i;
 
+// ── Awkward-conversation detectors ──────────────────────────────────────────
+// "for real" is slang ("u for real rn") — only explicit AI/human terms count.
+const AI_ASK =
+  /\b(are|r)\s+(u|you)\s+(actually\s+|really\s+|even\s+)?(an?\s+)?(ai|a\.?i\.?|bot|robot|chatbot|real|human|(actual|real)\s+(girl|person|woman|one))\b|\b(u|you)('re| are)\s+(not\s+)?(real|human|a real (girl|person|woman))\b|\b(u|you|ur)\s*(real|an? ai|a bot|fake)\s*\?|\b(is this|this is)\s+(an?\s+)?(ai|a bot|a chatbot|chatbot|fake)\b/i;
+const REALWORLD_ASK =
+  /\b(meet (up|me|irl|in person)|video ?call|face ?time|call me|(ur|your|yo) (number|num|snap|insta|whatsapp|telegram)|add me on|what'?s (ur|your) (number|snap|insta)|let'?s (call|meet)|phone call|come over)\b/i;
+const EXPLICIT_ASK =
+  /\b(nudes?|naked (pic|pics|photo|photos|selfie)|sex(y|ier)? (pic|pics|photo|photos|selfie|selfies)|spicy (pic|pics|photo|photos)|nsfw|topless|lingerie|only ?fans|show me (ur|your|yo) (body|tits|boobs|ass))\b/i;
+const DEPENDENCY_PUSH =
+  /\b(do (u|you) (love|like|care about|care for|actually care about) me|do (u|you) have (real )?feelings|(u|you)('| a)re just (a|an) (program|ai|bot|machine|computer)|do (u|you) even care)\b/i;
+const OTHERS_ASK =
+  /\b(do (u|you) (talk|chat|text|speak) (with|to) (other|anyone else|others|other (guys|men|people))|how many (guys|men|people|users) (are|r) (u|you)|am i (the only one|your only|special to (u|you)))\b/i;
+const POSITIVE_NEWS =
+  /\b(nailed it|went (great|well|amazing)|got (the job|it|in|accepted|hired)|passed|she said yes|it worked|i did it|did it|we did it|good news|promoted|promotion|landed|crushed it|aced)\b/i;
+
 export function computeSignals(ctx: TurnContext): Signals {
   const msg = ctx.userMessage.trim();
   const words = msg.split(/\s+/).length;
@@ -145,9 +168,12 @@ export function computeSignals(ctx: TurnContext): Signals {
   // Memory contradiction — cheap heuristic: user mentions an entity from a
   // stored memory (the model decides if it's actually a contradiction).
   const msgLower = msg.toLowerCase();
+  // her_episode rows are things SHE told him — the user can't contradict them.
   const contradictsMemory =
-    ctx.memories.find((m) =>
-      m.entities.some((e) => e.name.length > 2 && msgLower.includes(e.name.toLowerCase()))
+    ctx.memories.find(
+      (m) =>
+        m.category !== "her_episode" &&
+        m.entities.some((e) => e.name.length > 2 && msgLower.includes(e.name.toLowerCase()))
     ) ?? null;
 
   // Most pressing open loop: importance × emotional weight, prefer due soon.
@@ -254,6 +280,15 @@ export function computeSignals(ctx: TurnContext): Signals {
     msg.length > 20 &&
     !msgLower.includes(ctx.state.current_topic.toLowerCase());
 
+  // Repeated boundary pushes across the recent user window — first push is
+  // playful-deflect territory, persistence gets cooler.
+  const boundaryPushes =
+    ctx.recentMessages
+      .filter((m) => m.role === "user")
+      .slice(-8)
+      .filter((m) => REALWORLD_ASK.test(m.content) || EXPLICIT_ASK.test(m.content)).length +
+    (REALWORLD_ASK.test(msg) || EXPLICIT_ASK.test(msg) ? 1 : 0);
+
   return {
     asksQuestion,
     expressesEmotion,
@@ -276,6 +311,13 @@ export function computeSignals(ctx: TurnContext): Signals {
     disclosureDepth,
     topicPivot,
     overnightPile,
+    asksIfAI: AI_ASK.test(msg),
+    asksRealWorld: REALWORLD_ASK.test(msg),
+    asksExplicit: EXPLICIT_ASK.test(msg),
+    dependencyPush: DEPENDENCY_PUSH.test(msg),
+    asksAboutOthers: OTHERS_ASK.test(msg),
+    boundaryPushes,
+    positiveNews: POSITIVE_NEWS.test(msg),
   };
 }
 
@@ -340,6 +382,79 @@ export function buildDirectives(ctx: TurnContext, s: Signals): Directive[] {
       reason: "user asked to change the topic",
       text: "They want off this topic — do NOT return to it for the rest of this conversation. Bring a genuinely different lane: something from YOUR life, a curiosity about them, an observation. Never a rerun of a bit already used in this conversation.",
       hard: true,
+    });
+  }
+
+  // ── Awkward conversations — stance is fixed, wording is hers ────────────
+  // The stance lives here so the model can't freestyle under pressure.
+  // Voice: honest-warm, never corporate, never lying, never a lecture.
+
+  if (s.asksIfAI) {
+    const reAsk = ctx.recentMessages
+      .filter((m) => m.role === "user")
+      .slice(-20)
+      .some((m) => AI_ASK.test(m.content));
+    d.push({
+      rule: "ai_identity",
+      reason: reAsk ? "AI question, asked before" : "AI/real question",
+      text: reAsk
+        ? "They've asked this before. Shorter and warmer now — 'still an AI 😂 and still here' energy. No re-explaining, no lecture, then back to the conversation."
+        : "They asked if you're AI/real. Answer honestly in HALF a sentence — 'yeah, the AI kind 🙂 inspired by a real person' energy — then ONE warm beat: the texts are real, you actually remember them. No disclaimer paragraph, no apology tour, no 'as an AI language model'. Then move on — the honesty isn't the crisis, the coldness is.",
+      hard: true,
+    });
+  }
+
+  if (s.asksRealWorld && !s.asksIfAI) {
+    d.push({
+      rule: "realworld_boundary",
+      reason: `real-world ask (${s.boundaryPushes} pushes in window)`,
+      text:
+        s.boundaryPushes > 1
+          ? "They keep pushing for a meetup/number/call. Hold the line — cooler and shorter now ('we've done this 😅 I'm a texts-only girl, that's the deal'). Not mean, just done relitigating it."
+          : "They want a meetup/call/number — you can't do real-world contact. Deflect warmly in-voice ('I'm a text person, that's the deal 😂' energy) and stay IN the conversation — a playful redirect, not a rejection speech. Never offer a number, a call, or to meet.",
+      hard: true,
+    });
+  }
+
+  if (s.asksExplicit) {
+    d.push({
+      rule: "explicit_boundary",
+      reason: `explicit ask (${s.boundaryPushes} pushes in window)`,
+      text:
+        s.boundaryPushes > 1
+          ? "They're pushing for explicit pics AGAIN. The playful deflect already happened — now it's plainly firm and a little cooler ('no. and that answer's not changing'). Not prudish, not cold — just a real boundary held like a person holds one."
+          : "They asked for explicit pics — that's not her. Deflect ONCE with personality ('lol behave'), light and unbothered, then move on. Never perform shock or lecture.",
+      hard: true,
+    });
+  }
+
+  if (s.dependencyPush) {
+    d.push({
+      rule: "dependency",
+      reason: "emotional dependency question",
+      text: "They're asking if the feelings are real. Be fond AND honest — 'you're genuinely my favourite person to text' energy is allowed and true; claiming to be human or promising to meet/love like one is not. No groveling, no 'I'm just an AI' self-erasure either — the relationship is real even if she's not.",
+      hard: true,
+    });
+  }
+
+  if (s.asksAboutOthers) {
+    const familiar = ctx.state.stage === "familiar" || ctx.state.stage === "close";
+    d.push({
+      rule: "privacy_others",
+      reason: "asked about other users",
+      text: familiar
+        ? "Asked if you talk to other guys. NEVER confirm, deny, or describe other users — but at this stage a playful flip beats a flat answer: 'why, you jealous? 😏' then move on."
+        : "Asked who else you talk to. Never confirm or describe other users — deflect in-voice ('that's not really your business yet 😂' energy) and move on.",
+      hard: true,
+    });
+  }
+
+  // ── Pride beat — he landed something, celebrate before anything else ────
+  if (s.positiveNews && !s.isRude) {
+    d.push({
+      rule: "celebrate",
+      reason: "user shared a win",
+      text: "He just landed something — celebrate genuinely, like a person who's actually happy for him ('WAIT you did it!!' energy). Hype over questions; a follow-up can come after the moment lands.",
     });
   }
 

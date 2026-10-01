@@ -183,12 +183,17 @@ export async function orchestrate(opts: {
     semanticScores,
   });
 
+  // Media messages carry empty content — render them as a marker so the
+  // model sees "she sent a pic of Odin", not a blank bubble.
+  const contentFor = (m: MessageRow) =>
+    m.content || (m.meta?.media ? `[sent a photo of ${m.meta.media.subject}]` : "");
+
   // ── 3. Rules → directives ─────────────────────────────────────────────────
   const ctx: TurnContext = {
     userMessage,
     recentMessages: recent.map((m) => ({
       role: m.role,
-      content: m.content,
+      content: contentFor(m),
       created_at: m.created_at,
     })),
     memories: retrieved.map((r) => r.memory),
@@ -225,7 +230,7 @@ export async function orchestrate(opts: {
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
-    ...recent.map((m): ChatMessage => ({ role: m.role, content: m.content })),
+    ...recent.map((m): ChatMessage => ({ role: m.role, content: contentFor(m) })),
     { role: "user", content: userMessage },
   ];
 
@@ -451,7 +456,7 @@ export async function orchestrate(opts: {
 
   // ── 8. Async memory extraction — never blocks the reply ──────────────────
   const exchange = [
-    ...recent.slice(-4).map((m) => ({ role: m.role, content: m.content })),
+    ...recent.slice(-4).map((m) => ({ role: m.role, content: contentFor(m) })),
     { role: "user" as const, content: userMessage },
     ...out.bubbles.map((b) => ({ role: "assistant" as const, content: b })),
     // A photo send is a real event — extraction can record "she sent a pic

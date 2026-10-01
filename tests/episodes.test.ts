@@ -4,7 +4,9 @@ import { extractionSchema } from "@/lib/ai/schemas";
 import { effectiveConfidence } from "@/lib/memory/retrieve";
 import type { MemoryRow } from "@/lib/types";
 
-const ep = (over: Partial<Parameters<typeof dedupeNewEpisodes>[0][0]> = {}) => ({
+type EpisodeCandidate = Parameters<typeof dedupeNewEpisodes>[0][0];
+
+const ep = (over: Partial<EpisodeCandidate> = {}): EpisodeCandidate => ({
   content: "she said the shoot ran three hours over",
   importance: 3,
   keywords: ["shoot", "client"],

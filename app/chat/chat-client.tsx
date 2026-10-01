@@ -32,6 +32,30 @@ const TICK_MS = 15_000;
 const maxIso = (a: string | null, b: string | null) =>
   !a ? b : !b ? a : a > b ? a : b;
 
+/** Photo bubble — missing storage objects degrade to a quiet placeholder. */
+function MediaBubble({ media }: { media: BubbleMedia }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="flex h-[140px] w-[220px] items-center justify-center rounded-[14px] bg-neutral-100 text-[12px] text-neutral-400">
+        📷 {media.subject}
+      </div>
+    );
+  }
+  return (
+    <a href={media.url} target="_blank" rel="noreferrer" className="block">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={media.url}
+        alt={media.subject}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="block h-auto w-[220px] max-w-full rounded-[14px]"
+      />
+    </a>
+  );
+}
+
 export default function ChatClient() {
   const [messages, setMessages] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
@@ -444,19 +468,7 @@ function MessageList({ messages, pendingReadAt }: { messages: Bubble[]; pendingR
                     key={m.id}
                     className={`im-bubble im-pop ${g.role === "user" ? "im-user" : "im-her"} ${last ? "im-tail" : ""} ${i > 0 ? "mt-[2px]" : ""} ${m.media?.url ? "!p-1" : ""}`}
                   >
-                    {m.media?.url ? (
-                      <a href={m.media.url} target="_blank" rel="noreferrer" className="block">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={m.media.url}
-                          alt={m.media.subject}
-                          loading="lazy"
-                          className="block h-auto w-[220px] max-w-full rounded-[14px]"
-                        />
-                      </a>
-                    ) : (
-                      m.content
-                    )}
+                    {m.media?.url ? <MediaBubble media={m.media} /> : m.content}
                     {m.tapback && <div className="im-tapback">{m.tapback}</div>}
                   </div>
                 );

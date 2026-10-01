@@ -25,6 +25,7 @@ MEMORY RULES — be selective, not exhaustive:
 - category "pattern": ONLY for observed recurring behaviour, and ONLY with ≥2 supporting_memory_ids citing real past evidence. NEVER infer psychology from one conversation.
 - If the user contradicts an existing memory, update it (memory_updates) rather than duplicating.
 - related_memory_ids in memory_updates: link memories that belong to the same storyline.
+- If she coins a nickname/pet name for the user in this exchange → new_memories {"category":"relationship","content":"She calls him \"X\""}. Once stored it persists — she keeps using it.
 
 OPEN LOOPS — things with an unresolved future:
 - create: interview Friday, waiting on a reply, "I'm thinking about quitting", a plan she should ask about later.
@@ -35,6 +36,7 @@ HER EPISODES — what the ASSISTANT told the user about her own life:
 - Store concrete claims she made that could be contradicted or called back later: "the shoot ran 3 hours over", "lecture at 8 tomorrow", "Odin shredded my cushion", "I'm at my parents' this weekend".
 - Do NOT store canon she merely restated (that she has a dog, is a law student, lives in Stockholm — already known) or pure flavor with no callback value.
 - Named people must come from her existing world only — never record invented names.
+- Also store shared rituals/inside-jokes that emerged this exchange ("they have a goodnight-text ritual", "the sock bit is their running joke") — these let her reference them as "theirs" later.
 - Importance: 2-3 for texture (a minor anecdote), 4-6 for things he'd plausibly ask about again (the shoot outcome, an upcoming exam), 7+ only for genuinely significant events.
 - thread_slug: set it when the episode belongs to a known life thread, else null.
 
@@ -209,9 +211,26 @@ export async function extractAndStore(opts: {
   }
 
   // ── her commitments — dated plans become tomorrow's schedule ────────────
+  // Same-day dedupe: "gym tomorrow" said three times is one commitment.
   for (const c of out.her_commitments.slice(0, 3)) {
     const day = resolveDayHint(c.day_hint);
     if (!day) continue;
+    const { data: existing } = await supabase
+      .from("her_commitments")
+      .select("id, content")
+      .eq("user_id", userId)
+      .eq("target_day", day)
+      .eq("consumed", false);
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+    if (
+      (existing ?? []).some(
+        (e: { content: string }) =>
+          norm(e.content) === norm(c.content) ||
+          norm(e.content).includes(norm(c.content)) ||
+          norm(c.content).includes(norm(e.content))
+      )
+    )
+      continue;
     await supabase.from("her_commitments").insert({
       user_id: userId,
       target_day: day,

@@ -119,7 +119,10 @@ export function dedupeNewEpisodes(
     (m) => m.category === "her_episode" && m.status === "active"
   );
 
-  for (const c of candidates.slice(0, CONFIG.life.episodeMaxPerTurn)) {
+  // Gate BEFORE capping — otherwise three noise candidates can crowd out a
+  // keeper that came fourth in the same turn.
+  for (const c of candidates) {
+    if (accepted.length >= CONFIG.life.episodeMaxPerTurn) break;
     if (c.importance < CONFIG.life.episodeMinImportance) continue;
     const dupe = episodes.find(
       (m) =>

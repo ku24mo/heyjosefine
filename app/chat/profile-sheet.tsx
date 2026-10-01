@@ -140,6 +140,7 @@ function SheetInner({
                     src={url}
                     alt=""
                     loading="lazy"
+                    onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                     className="h-20 w-20 shrink-0 rounded-xl object-cover"
                   />
                 ))}
