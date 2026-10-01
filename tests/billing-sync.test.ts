@@ -24,7 +24,7 @@ function fakeSupabase(customerMatchRows: { id: string }[] = []) {
       return Promise.resolve({ data: customerMatchRows });
     },
     then(resolve: (v: { data: { id: string }[] }) => unknown) {
-      return Promise.resolve({ data: [{}] }).then(resolve);
+      return Promise.resolve({ data: [{ id: "u1" }] }).then(resolve);
     },
   };
   const client = {
