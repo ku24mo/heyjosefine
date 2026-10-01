@@ -53,6 +53,9 @@ export default function AboutClient() {
 
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[#171324] text-white">
+      {/* her — blurred into the dusk, beneath the fog */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/josefine-dusk.jpg" alt="" aria-hidden className="dusk-photo" />
       {/* dusk field — three slow blobs, motion you almost can't see */}
       <div
         className="dusk-blob dusk-drift-a h-[65vmax] w-[65vmax] left-[-15vmax] top-[-20vmax] opacity-70"

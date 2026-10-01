@@ -206,6 +206,28 @@ body {
 .dusk-drift-b { animation: dusk-drift-b 61s ease-in-out infinite; }
 .dusk-drift-c { animation: dusk-drift-c 43s ease-in-out infinite; }
 
+/* Her — the photo dissolved into the field. Blurred, pulled toward the violet
+   palette, edges masked away so there's no rectangle — she emerges from the
+   fog rather than sitting on top of it. */
+@keyframes dusk-breathe {
+  from { transform: scale(1.02); }
+  to { transform: scale(1.09) translateX(-1.5%); }
+}
+.dusk-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 72% 50%;
+  opacity: 0.5;
+  filter: blur(2px) saturate(0.72) brightness(0.78);
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 60% 50%, black 35%, transparent 78%);
+  mask-image: radial-gradient(ellipse 85% 75% at 60% 50%, black 35%, transparent 78%);
+  animation: dusk-breathe 70s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
 /* Film grain — keeps the gradient from looking flat-digital. */
 .dusk-grain {
   position: absolute;
