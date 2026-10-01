@@ -30,12 +30,25 @@ function herStatusLine(now: Date): string {
 
 export default function AboutClient() {
   const [status, setStatus] = useState("stockholm");
+  // Her real day — rendered under the status line when available.
+  const [herDay, setHerDay] = useState<string | null>(null);
 
   useEffect(() => {
     const tick = () => setStatus(herStatusLine(new Date()));
     tick();
     const iv = setInterval(tick, 60_000);
     return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/her-day")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        // Right-now slot beats the headline — it varies by hour.
+        const line = d?.now?.label ? `right now: ${d.now.label}` : d?.headline ? `today: ${d.headline}` : null;
+        if (line) setHerDay(line.toLowerCase());
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -65,6 +78,11 @@ export default function AboutClient() {
         <p className="dusk-fade-slow mt-5 text-sm text-white/70 sm:text-base">
           {status}
         </p>
+        {herDay && (
+          <p className="dusk-fade-slow mt-2 text-[13px] italic text-white/45">
+            {herDay}
+          </p>
+        )}
         <Link
           href="/"
           className="dusk-fade-slower mt-14 rounded-full border border-white/25 bg-white/10 px-8 py-3 text-sm tracking-wide backdrop-blur-sm transition-colors hover:bg-white/20"
