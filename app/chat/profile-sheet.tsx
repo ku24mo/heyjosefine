@@ -262,6 +262,15 @@ function SheetInner({
             </button>
           )}
         </div>
+
+        {/* quiet footer — the way out to the site */}
+        <div className="mt-6 flex items-center justify-center gap-3 pb-6 text-[11px] text-neutral-400">
+          <Link href="/about" className="hover:text-neutral-600">about josefine</Link>
+          <span aria-hidden>·</span>
+          <Link href="/privacy" className="hover:text-neutral-600">privacy</Link>
+          <span aria-hidden>·</span>
+          <Link href="/terms" className="hover:text-neutral-600">terms</Link>
+        </div>
       </div>
     </div>
   );
