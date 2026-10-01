@@ -86,7 +86,7 @@ export default function AboutClient() {
             {herDay}
           </p>
         )}
-        <p className="dusk-fade-slower mt-8 max-w-[280px] text-[13px] leading-relaxed text-white/50">
+        <p className="dusk-fade-slower mt-8 max-w-[280px] text-[13px] leading-relaxed text-white/60">
           she remembers what you told her last tuesday. sometimes she texts
           first.
         </p>

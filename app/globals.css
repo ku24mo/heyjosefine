@@ -220,10 +220,10 @@ body {
   height: 100%;
   object-fit: cover;
   object-position: 72% 50%;
-  opacity: 0.5;
-  filter: blur(2px) saturate(0.72) brightness(0.78);
-  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 60% 50%, black 35%, transparent 78%);
-  mask-image: radial-gradient(ellipse 85% 75% at 60% 50%, black 35%, transparent 78%);
+  opacity: 0.42;
+  filter: blur(3.5px) saturate(0.72) brightness(0.7);
+  -webkit-mask-image: radial-gradient(ellipse 80% 72% at 68% 42%, black 30%, transparent 72%);
+  mask-image: radial-gradient(ellipse 80% 72% at 68% 42%, black 30%, transparent 72%);
   animation: dusk-breathe 70s ease-in-out infinite alternate;
   pointer-events: none;
 }
