@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       </ul>
       <h2 className="mb-2 mt-6 font-semibold text-neutral-900">what we do with it</h2>
       <ul className="list-disc space-y-1 pl-5">
-        <li>Messages and memories are sent to our AI provider (DeepSeek) to generate her replies.</li>
+        <li>Messages and memories are sent to our AI provider to generate her replies.</li>
         <li>Payments are handled by Stripe — we never see your card.</li>
         <li>We don&rsquo;t sell your data or show ads.</li>
       </ul>
