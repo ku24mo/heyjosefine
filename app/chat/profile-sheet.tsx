@@ -104,10 +104,9 @@ function SheetInner({
         <div className="flex flex-col items-center px-6 pb-5 pt-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/josefine-dusk.jpg"
+            src="/josefine-avatar.jpg"
             alt="Josefine"
             className="h-20 w-20 rounded-full object-cover"
-            style={{ objectPosition: "70% 28%" }}
           />
           <div className="mt-2 text-xl font-semibold">Josefine</div>
           <div className="mt-0.5 text-[12px] text-neutral-500">{statusLine}</div>

@@ -81,10 +81,9 @@ function Inner({
         <div className="flex flex-col items-center text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/josefine-dusk.jpg"
+            src="/josefine-avatar.jpg"
             alt="Josefine"
             className="h-14 w-14 rounded-full object-cover"
-            style={{ objectPosition: "70% 28%" }}
           />
           <h2 className="mt-3 text-[17px] font-semibold text-black">
             she wants to remember you

@@ -397,10 +397,9 @@ export default function ChatClient() {
         <div className="flex flex-1 flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/josefine-dusk.jpg"
+            src="/josefine-avatar.jpg"
             alt="Josefine"
             className="h-9 w-9 rounded-full object-cover"
-            style={{ objectPosition: "70% 28%" }}
           />
           <div className="mt-0.5 text-[13px] font-semibold leading-tight">Josefine</div>
           <div className="flex items-center gap-1 text-[10px] leading-tight text-neutral-500">
