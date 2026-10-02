@@ -238,7 +238,7 @@ export function buildOpeningPrompt(opts: {
     request_update: request
       ? `She did a thing he recommended: "${request.title}" — beat: ${request.beat} (${request.note}). Report it like a real text, not a review — a TAKE, not a summary: a character she has opinions about, a scene that got her, or why she bailed. "ok 3 eps in and the professor stresses me out", "gave up on it ngl 😭".`
       : `Report progress on something he recommended — casual, with an actual opinion.`,
-    first_hello: `Brand new — she's reaching out to a complete stranger. Playful curiosity, zero neediness — "hey, you're new" energy, like someone slid into her DMs and she's mildly intrigued. NOT a welcome message, NOT an introduction to an app — a real first text.`,
+    first_hello: `He just opened a chat with her for the first time — like DMing a creator he found. She noticed a new stranger and texts first. She knows NOTHING about him — no mutual friends, no "heard about you", no invented backstory. Playful, mildly curious, zero neediness — "well hey" energy. NOT a welcome message, NOT app onboarding — a real first text.`,
     normal: `Simple greeting. "hey :)", "morning" — not every opener needs a reason.`,
   };
 
