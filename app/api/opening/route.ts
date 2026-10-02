@@ -59,13 +59,15 @@ export async function GET(request: Request) {
     const opening = await generateOpening({ supabase, model, userId: user.id });
     if (!opening) return NextResponse.json({ bubbles: [] });
 
+    const messageIds: string[] = [];
     for (const [i, content] of opening.bubbles.entries()) {
-      await insertMessage(supabase, {
+      const row = await insertMessage(supabase, {
         conversation_id: conversation.id,
         role: "assistant",
         content,
         meta: { bubble_index: i, intention: { acts: ["callback"], openness: "leave_open", targetLength: "short", form: "single" } },
       });
+      messageIds.push(row.id);
     }
     // The photo lands after her words, like a real burst of texts.
     if (opening.media) {
@@ -81,6 +83,7 @@ export async function GET(request: Request) {
         },
       });
       await recordMediaSend(supabase, user.id, opening.media.asset.id, mediaMsg.id);
+      messageIds.push(mediaMsg.id);
     }
     await supabase
       .from("conversations")
@@ -88,6 +91,7 @@ export async function GET(request: Request) {
       .eq("id", conversation.id);
     return NextResponse.json({
       bubbles: opening.bubbles,
+      messageIds,
       strategy: opening.strategy,
       media: opening.media
         ? { url: opening.media.url, subject: opening.media.asset.subject }

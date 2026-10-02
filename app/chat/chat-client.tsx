@@ -17,7 +17,10 @@ interface Bubble {
   role: "user" | "assistant";
   content: string;
   created_at?: string;
+  /** Her reaction to his bubble (meta.tapback). */
   tapback?: string | null;
+  /** His reaction to her bubble (meta.user_tapback). */
+  userTapback?: string | null;
   media?: BubbleMedia | null;
 }
 
@@ -32,7 +35,9 @@ const TICK_MS = 15_000;
 const maxIso = (a: string | null, b: string | null) =>
   !a ? b : !b ? a : a > b ? a : b;
 
-/** Photo bubble — missing storage objects degrade to a quiet placeholder. */
+/** Photo bubble — missing storage objects degrade to a quiet placeholder.
+ *  Not an anchor: the tap handler on the bubble decides — single tap opens
+ *  it, double-tap ❤️s it instead (iOS behavior). */
 function MediaBubble({ media }: { media: BubbleMedia }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
@@ -43,16 +48,14 @@ function MediaBubble({ media }: { media: BubbleMedia }) {
     );
   }
   return (
-    <a href={media.url} target="_blank" rel="noreferrer" className="block">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={media.url}
-        alt={media.subject}
-        loading="lazy"
-        onError={() => setFailed(true)}
-        className="block h-auto w-[220px] max-w-full rounded-[14px]"
-      />
-    </a>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={media.url}
+      alt={media.subject}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="block h-auto w-[220px] max-w-full cursor-pointer rounded-[14px]"
+    />
   );
 }
 
@@ -82,9 +85,13 @@ export default function ChatClient() {
   const [guestFailed, setGuestFailed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
-  const sendingRef = useRef(false);
   /** Message that hit the claim wall — resent once the account is claimed. */
   const blockedTextRef = useRef<string | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  /** Double-tap detector for reacting to her bubbles. */
+  const lastTapRef = useRef<{ id: string; t: number } | null>(null);
+  /** Single-tap on a photo opens it after a grace window a double-tap can cancel. */
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollToBottom = useCallback((instant = false) => {
     const go = () =>
@@ -128,8 +135,10 @@ export default function ChatClient() {
   }, [refreshPresence]);
 
   // Staggered reveal — bubbles land one at a time like real texts.
+  // messageIds (index-aligned, media id last) keep new bubbles react-able
+  // without waiting for a history reload.
   const revealBubbles = useCallback(
-    (bubbles: string[], media?: BubbleMedia | null) => {
+    (bubbles: string[], media?: BubbleMedia | null, messageIds?: string[]) => {
       pendingRef.current = pendingRef.current.then(async () => {
         for (const [i, content] of bubbles.entries()) {
           await sleep(i === 0 ? REVEAL_MS : REVEAL_MS + Math.min(content.length * 8, 1500));
@@ -138,7 +147,7 @@ export default function ChatClient() {
           setMessages((m) => [
             ...m,
             {
-              id: `local-${Date.now()}-${i}`,
+              id: messageIds?.[i] ?? `local-${Date.now()}-${i}`,
               role: "assistant",
               content,
               created_at: new Date().toISOString(),
@@ -154,7 +163,7 @@ export default function ChatClient() {
           setMessages((m) => [
             ...m,
             {
-              id: `local-media-${Date.now()}`,
+              id: messageIds?.[bubbles.length] ?? `local-media-${Date.now()}`,
               role: "assistant",
               content: "",
               created_at: new Date().toISOString(),
@@ -175,7 +184,12 @@ export default function ChatClient() {
     const res = await fetch("/api/history");
     if (res.ok) {
       const { messages, plan: p, relationship } = await res.json();
-      setMessages(messages);
+      setMessages(
+        messages.map((m: Bubble & { user_tapback?: string | null }) => ({
+          ...m,
+          userTapback: m.user_tapback ?? null,
+        }))
+      );
       if (p) setPlan(p);
       if (relationship) setRelationship(relationship);
       const lastHer = [...messages].reverse().find((m: Bubble) => m.role === "assistant");
@@ -192,11 +206,11 @@ export default function ChatClient() {
       },
     });
     if (open.ok) {
-      const { bubbles, media } = await open.json();
+      const { bubbles, media, messageIds } = await open.json();
       if (bubbles?.length || media) {
         setTyping(true);
         scrollToBottom();
-        await revealBubbles(bubbles ?? [], media ?? null);
+        await revealBubbles(bubbles ?? [], media ?? null, messageIds);
       }
     }
   }, [revealBubbles, scrollToBottom]);
@@ -207,11 +221,11 @@ export default function ChatClient() {
     if (document.hidden) return;
     const res = await fetch("/api/nudge").catch(() => null);
     if (res?.ok) {
-      const { bubbles } = await res.json();
+      const { bubbles, messageIds } = await res.json();
       if (bubbles?.length) {
         setTyping(true);
         scrollToBottom();
-        await revealBubbles(bubbles);
+        await revealBubbles(bubbles, null, messageIds);
       }
     }
   }, [revealBubbles, scrollToBottom]);
@@ -253,9 +267,11 @@ export default function ChatClient() {
   }, []);
 
   async function sendText(text: string, echoLocal = true) {
-    if (!text || sendingRef.current) return;
-    sendingRef.current = true;
+    // No send-blocking: he can double-text while she's typing — the server
+    // turn-lock serializes and revealBubbles keeps her replies in order.
+    if (!text) return;
     setInput("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
     setPendingReadAt(null);
     if (echoLocal) {
       setMessages((m) => [
@@ -304,12 +320,53 @@ export default function ChatClient() {
       setTyping(true);
       setPendingReadAt(new Date().toISOString());
       await sleep(Math.min(typingLeadMs, delayLeft));
-      await revealBubbles(bubbles, data.media ?? null);
+      await revealBubbles(bubbles, data.media ?? null, data.messageIds);
     } catch {
       setTyping(false);
       await revealBubbles(["my brain just froze 😅 say that again?"]);
-    } finally {
-      sendingRef.current = false;
+    }
+  }
+
+  /** Taps on her bubbles: double-tap toggles ❤️; on photos a single tap opens
+   *  the image after a short grace window the second tap cancels. */
+  function tapHer(m: Bubble) {
+    const t = Date.now();
+    if (lastTapRef.current?.id === m.id && t - lastTapRef.current.t < 350) {
+      lastTapRef.current = null;
+      if (openTimerRef.current) {
+        clearTimeout(openTimerRef.current);
+        openTimerRef.current = null;
+      }
+      void reactTo(m);
+      return;
+    }
+    lastTapRef.current = { id: m.id, t };
+    if (m.media?.url) {
+      if (openTimerRef.current) clearTimeout(openTimerRef.current);
+      const url = m.media.url;
+      openTimerRef.current = setTimeout(() => {
+        window.open(url, "_blank", "noreferrer");
+        openTimerRef.current = null;
+      }, 350);
+    }
+  }
+
+  async function reactTo(m: Bubble) {
+    if (m.id.startsWith("local-")) return; // not persisted yet — nothing to hit
+    const nextEmoji = m.userTapback ? null : "❤️";
+    setMessages((ms) =>
+      ms.map((b) => (b.id === m.id ? { ...b, userTapback: nextEmoji } : b))
+    );
+    const res = await fetch("/api/react", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId: m.id, emoji: nextEmoji }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      // Roll back quietly — a dropped reaction is not worth an error state.
+      setMessages((ms) =>
+        ms.map((b) => (b.id === m.id ? { ...b, userTapback: m.userTapback } : b))
+      );
     }
   }
 
@@ -338,9 +395,13 @@ export default function ChatClient() {
       <header className="flex items-center border-b border-neutral-200 px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <span aria-hidden className="w-9" />
         <div className="flex flex-1 flex-col items-center">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-rose-300 to-amber-200 text-sm font-semibold text-white">
-            J
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/josefine-dusk.jpg"
+            alt="Josefine"
+            className="h-9 w-9 rounded-full object-cover"
+            style={{ objectPosition: "70% 28%" }}
+          />
           <div className="mt-0.5 text-[13px] font-semibold leading-tight">Josefine</div>
           <div className="flex items-center gap-1 text-[10px] leading-tight text-neutral-500">
             {online && (
@@ -374,7 +435,11 @@ export default function ChatClient() {
             say hi — she&rsquo;s curious who you are
           </div>
         ) : (
-          <MessageList messages={messages} pendingReadAt={pendingReadAt} />
+          <MessageList
+            messages={messages}
+            pendingReadAt={pendingReadAt}
+            onHerTap={tapHer}
+          />
         )}
         {typing && <TypingDots />}
         {paywall && (
@@ -394,13 +459,27 @@ export default function ChatClient() {
         onSubmit={send}
         className="flex items-center gap-2 border-t border-neutral-200 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
       >
-        <div className="flex-1 rounded-full border border-neutral-300 px-4 py-2">
-          <input
+        <div className="flex-1 rounded-[20px] border border-neutral-300 px-4 py-2">
+          <textarea
+            ref={inputRef}
+            rows={1}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              const el = e.target;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void sendText(input.trim());
+              }
+            }}
             placeholder="iMessage"
-            className="w-full text-[16.5px] outline-none placeholder:text-neutral-400"
+            enterKeyHint="send"
             autoComplete="off"
+            className="block w-full resize-none text-[16.5px] leading-snug outline-none placeholder:text-neutral-400"
           />
         </div>
         <button
@@ -457,7 +536,16 @@ export default function ChatClient() {
 
 const GAP_MS = 60 * 60_000; // timestamp separator after an hour of silence
 
-function MessageList({ messages, pendingReadAt }: { messages: Bubble[]; pendingReadAt: string | null }) {
+function MessageList({
+  messages,
+  pendingReadAt,
+  onHerTap,
+}: {
+  messages: Bubble[];
+  pendingReadAt: string | null;
+  /** Double-tap detector lives in the parent — this fires per tap on her bubbles. */
+  onHerTap: (m: Bubble) => void;
+}) {
   // iOS groups consecutive same-sender bubbles; tail goes on the last one.
   const groups: { role: Bubble["role"]; items: Bubble[] }[] = [];
   for (const m of messages) {
@@ -497,10 +585,14 @@ function MessageList({ messages, pendingReadAt }: { messages: Bubble[]; pendingR
                 return (
                   <div
                     key={m.id}
+                    onPointerUp={g.role === "assistant" ? () => onHerTap(m) : undefined}
                     className={`im-bubble im-pop ${g.role === "user" ? "im-user" : "im-her"} ${last ? "im-tail" : ""} ${i > 0 ? "mt-[2px]" : ""} ${m.media?.url ? "!p-1" : ""}`}
                   >
                     {m.media?.url ? <MediaBubble media={m.media} /> : m.content}
                     {m.tapback && <div className="im-tapback">{m.tapback}</div>}
+                    {m.userTapback && (
+                      <div className="im-tapback">{m.userTapback}</div>
+                    )}
                   </div>
                 );
               })}

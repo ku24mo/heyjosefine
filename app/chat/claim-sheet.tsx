@@ -79,9 +79,13 @@ function Inner({
         <div className="mx-auto mb-4 h-1 w-9 rounded-full bg-neutral-300" />
 
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-rose-300 to-amber-200 text-lg font-semibold text-white">
-            J
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/josefine-dusk.jpg"
+            alt="Josefine"
+            className="h-14 w-14 rounded-full object-cover"
+            style={{ objectPosition: "70% 28%" }}
+          />
           <h2 className="mt-3 text-[17px] font-semibold text-black">
             she wants to remember you
           </h2>

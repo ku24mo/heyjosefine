@@ -51,6 +51,7 @@ export async function GET() {
       content: m.content,
       created_at: m.created_at,
       tapback: m.meta?.tapback ?? null,
+      user_tapback: m.meta?.user_tapback ?? null,
       media: m.meta?.media ?? null,
     })),
   });

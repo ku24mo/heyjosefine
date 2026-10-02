@@ -102,9 +102,13 @@ function SheetInner({
 
         {/* profile card */}
         <div className="flex flex-col items-center px-6 pb-5 pt-4">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-rose-300 to-amber-200 text-2xl font-semibold text-white">
-            J
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/josefine-dusk.jpg"
+            alt="Josefine"
+            className="h-20 w-20 rounded-full object-cover"
+            style={{ objectPosition: "70% 28%" }}
+          />
           <div className="mt-2 text-xl font-semibold">Josefine</div>
           <div className="mt-0.5 text-[12px] text-neutral-500">{statusLine}</div>
           <div className="mt-2 text-center text-[13px] leading-snug text-neutral-600">

@@ -38,20 +38,22 @@ export async function GET() {
     });
     if (!got) return NextResponse.json({ bubbles: [] });
 
+    const messageIds: string[] = [];
     for (const [i, content] of got.result.bubbles.entries()) {
-      await insertMessage(supabase, {
+      const row = await insertMessage(supabase, {
         conversation_id: got.conversationId,
         role: "assistant",
         content,
         meta: { bubble_index: i, nudge: true },
       });
+      messageIds.push(row.id);
     }
     await supabase
       .from("conversations")
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", got.conversationId);
 
-    return NextResponse.json({ bubbles: got.result.bubbles });
+    return NextResponse.json({ bubbles: got.result.bubbles, messageIds });
   } finally {
     await releaseTurnLock(supabase, user.id);
   }
