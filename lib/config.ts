@@ -117,4 +117,9 @@ export const CONFIG = {
     decayPerTurn: 0.15, // drifts toward baseline each exchange
     baseline: { energy: 0.7, valence: 0.6 },
   },
+
+  // Billing — the one price label, everywhere it's shown.
+  billing: {
+    monthlyUsd: "$9.99",
+  },
 } as const;

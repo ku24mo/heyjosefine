@@ -442,6 +442,7 @@ export default function ChatClient() {
 
       <ClaimSheet
         open={claimOpen}
+        onDismiss={() => setClaimOpen(false)}
         onClaimed={() => {
           setAnonymous(false);
           setClaimOpen(false);

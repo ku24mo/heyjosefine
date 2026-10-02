@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
 /**
@@ -12,12 +12,19 @@ import { getBrowserSupabase } from "@/lib/supabase/client";
 export default function ClaimSheet(props: {
   open: boolean;
   onClaimed: () => void;
+  onDismiss: () => void;
 }) {
   if (!props.open) return null;
   return <Inner {...props} />;
 }
 
-function Inner({ onClaimed }: { onClaimed: () => void }) {
+function Inner({
+  onClaimed,
+  onDismiss,
+}: {
+  onClaimed: () => void;
+  onDismiss: () => void;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -48,9 +55,27 @@ function Inner({ onClaimed }: { onClaimed: () => void }) {
     onClaimed();
   }
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onDismiss();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30">
-      <div className="w-full max-w-md rounded-t-2xl bg-[#f2f2f7] px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5">
+    <div
+      className="fixed inset-0 z-40 flex items-end justify-center bg-black/30"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onDismiss();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="keep this conversation"
+        className="w-full max-w-md rounded-t-2xl bg-[#f2f2f7] px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5"
+      >
         <div className="mx-auto mb-4 h-1 w-9 rounded-full bg-neutral-300" />
 
         <div className="flex flex-col items-center text-center">
@@ -67,12 +92,21 @@ function Inner({ onClaimed }: { onClaimed: () => void }) {
         </div>
 
         {existing ? (
-          <div className="mt-5 rounded-xl bg-white px-4 py-4 text-center text-[14px] text-neutral-600">
-            that email already has an account.{" "}
-            <Link href="/auth" className="font-medium text-[#0a84ff]">
-              log in
-            </Link>
-          </div>
+          <>
+            <div className="mt-5 rounded-xl bg-white px-4 py-4 text-center text-[14px] text-neutral-600">
+              that email already has an account.{" "}
+              <Link href="/auth" className="font-medium text-[#0a84ff]">
+                log in
+              </Link>
+            </div>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="mt-3 w-full text-center text-[13px] text-neutral-400"
+            >
+              not now
+            </button>
+          </>
         ) : (
           <form onSubmit={claim} className="mt-5 space-y-2.5">
             <input
@@ -117,6 +151,13 @@ function Inner({ onClaimed }: { onClaimed: () => void }) {
                 log in
               </Link>
             </p>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="w-full pt-1 text-center text-[12px] text-neutral-400"
+            >
+              not now
+            </button>
           </form>
         )}
       </div>

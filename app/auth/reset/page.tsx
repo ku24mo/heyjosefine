@@ -13,6 +13,7 @@ export default function ResetPage() {
   const [ready, setReady] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,18 +53,27 @@ export default function ResetPage() {
           <div className="text-center text-sm text-neutral-500">…</div>
         ) : (
           <form onSubmit={submit} className="space-y-3">
+            <div className="relative">
+              <input
+                type={showPw ? "text" : "password"}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="new password (8+ characters)"
+                autoComplete="new-password"
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 pr-14 text-sm outline-none placeholder:text-neutral-500 focus:border-neutral-600"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((s) => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-neutral-400"
+              >
+                {showPw ? "hide" : "show"}
+              </button>
+            </div>
             <input
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="new password (8+ characters)"
-              autoComplete="new-password"
-              className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm outline-none placeholder:text-neutral-500 focus:border-neutral-600"
-            />
-            <input
-              type="password"
+              type={showPw ? "text" : "password"}
               required
               minLength={8}
               value={confirm}

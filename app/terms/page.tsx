@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CONFIG } from "@/lib/config";
 
 export const metadata: Metadata = { title: "terms — josefine" };
 
@@ -18,7 +19,7 @@ export default function TermsPage() {
           in crisis, please contact local support services.
         </li>
         <li>
-          Paid subscriptions ($9.99/month) renew monthly via Stripe and can be
+          Paid subscriptions ({CONFIG.billing.monthlyUsd}/month) renew monthly via Stripe and can be
           cancelled anytime — access continues to the end of the period.
         </li>
         <li>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CONFIG } from "@/lib/config";
 import { setSoundEnabled, soundEnabled } from "@/lib/sounds";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
@@ -195,7 +196,7 @@ function SheetInner({
               </span>
               <span className="flex-1 text-left">
                 <span className="block text-[15px] font-medium">Josefine Unlimited</span>
-                <span className="block text-[12px] text-neutral-500">$9.99 / month</span>
+                <span className="block text-[12px] text-neutral-500">{CONFIG.billing.monthlyUsd} / month</span>
               </span>
               <span className="text-neutral-300">›</span>
             </Link>

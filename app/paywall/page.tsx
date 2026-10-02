@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CONFIG } from "@/lib/config";
 
 export default function Paywall() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function Paywall() {
             J
           </div>
           <h1 className="mt-3 text-xl font-semibold">Josefine Unlimited</h1>
-          <div className="mt-1 text-[15px] text-neutral-500">$9.99 / month</div>
+          <div className="mt-1 text-[15px] text-neutral-500">{CONFIG.billing.monthlyUsd} / month</div>
         </div>
 
         <div className="mt-6 rounded-xl bg-white px-4 py-1">
@@ -58,7 +59,7 @@ export default function Paywall() {
           disabled={busy}
           className="mt-6 w-full rounded-xl bg-[#0a84ff] px-4 py-3 text-[15px] font-medium text-white active:bg-[#0070e0] disabled:opacity-50"
         >
-          {busy ? "redirecting…" : "Subscribe — $9.99/mo"}
+          {busy ? "redirecting…" : `Subscribe — ${CONFIG.billing.monthlyUsd}/mo`}
         </button>
         {err && <div className="mt-2 text-center text-[13px] text-rose-500">{err}</div>}
         <Link
