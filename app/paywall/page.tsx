@@ -40,9 +40,9 @@ export default function Paywall() {
 
         <div className="mt-6 rounded-xl bg-white px-4 py-1">
           {[
-            "Unlimited messages — no daily caps",
-            "She remembers everything between you",
-            "Her story keeps going, day after day",
+            "unlimited messages — no daily caps",
+            "she remembers everything between you",
+            "her story keeps going, day after day",
           ].map((line, i) => (
             <div
               key={line}
@@ -59,7 +59,7 @@ export default function Paywall() {
           disabled={busy}
           className="mt-6 w-full rounded-xl bg-[#0a84ff] px-4 py-3 text-[15px] font-medium text-white active:bg-[#0070e0] disabled:opacity-50"
         >
-          {busy ? "redirecting…" : `Subscribe — ${CONFIG.billing.monthlyUsd}/mo`}
+          {busy ? "redirecting…" : `subscribe — ${CONFIG.billing.monthlyUsd}/mo`}
         </button>
         {err && <div className="mt-2 text-center text-[13px] text-rose-500">{err}</div>}
         <Link

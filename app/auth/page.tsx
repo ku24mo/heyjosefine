@@ -234,7 +234,7 @@ function AuthInner() {
             {guestSwitching && (
               <p className="mt-3 text-center text-xs leading-relaxed text-neutral-500">
                 heads up — logging into another account won&apos;t bring this
-                guest thread with it.{" "}
+                conversation with it.{" "}
                 <button
                   type="button"
                   onClick={() => {
@@ -244,7 +244,7 @@ function AuthInner() {
                   }}
                   className="text-neutral-300 underline underline-offset-2"
                 >
-                  keep this thread instead
+                  keep this conversation instead
                 </button>
               </p>
             )}
@@ -294,8 +294,8 @@ function AuthInner() {
           <Link href="/" className="text-neutral-400 underline underline-offset-2">
             keep chatting as a guest
           </Link>
-          {" · "}Josefine is an AI, not a real person. By continuing you agree
-          this is an AI experience inspired by the creator.
+          {" · "}Josefine is an AI, not a real person. 18+. By continuing you
+          agree this is an AI experience inspired by the creator.
         </p>
       </div>
     </main>

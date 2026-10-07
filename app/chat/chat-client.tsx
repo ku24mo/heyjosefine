@@ -80,6 +80,8 @@ export default function ChatClient() {
   } | null>(null);
   /** Anonymous guest vs claimed account — gates the claim wall + sheet rows. */
   const [anonymous, setAnonymous] = useState(false);
+  /** Signed-out returner chatting as a fresh guest — show the way back. */
+  const [returning, setReturning] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
   /** Guest-create or network failure on mount — unrecoverable inline state. */
   const [guestFailed, setGuestFailed] = useState(false);
@@ -259,6 +261,19 @@ export default function ChatClient() {
         ({ data: { user } } = await getBrowserSupabase().auth.getUser());
       }
       setAnonymous(user?.is_anonymous === true);
+      // Signed-out returner who just minted a fresh guest — their real thread
+      // is a login away; a quiet banner offers the path back. Clears itself
+      // the moment a real session mounts (login or claim).
+      if (user?.is_anonymous) {
+        if (
+          localStorage.getItem("hj_returning") === "1" &&
+          !sessionStorage.getItem("hj_wb_hidden")
+        ) {
+          setReturning(true);
+        }
+      } else {
+        localStorage.removeItem("hj_returning");
+      }
       await loadHistory();
       scrollToBottom(true); // open at the newest message, not the top
       await tryOpening(); // proactive opener — she may have a reason to text first
@@ -327,31 +342,7 @@ export default function ChatClient() {
     }
   }
 
-  /** Taps on her bubbles: double-tap toggles ❤️; on photos a single tap opens
-   *  the image after a short grace window the second tap cancels. */
-  function tapHer(m: Bubble) {
-    const t = Date.now();
-    if (lastTapRef.current?.id === m.id && t - lastTapRef.current.t < 350) {
-      lastTapRef.current = null;
-      if (openTimerRef.current) {
-        clearTimeout(openTimerRef.current);
-        openTimerRef.current = null;
-      }
-      void reactTo(m);
-      return;
-    }
-    lastTapRef.current = { id: m.id, t };
-    if (m.media?.url) {
-      if (openTimerRef.current) clearTimeout(openTimerRef.current);
-      const url = m.media.url;
-      openTimerRef.current = setTimeout(() => {
-        window.open(url, "_blank", "noreferrer");
-        openTimerRef.current = null;
-      }, 350);
-    }
-  }
-
-  async function reactTo(m: Bubble) {
+  const reactTo = useCallback(async (m: Bubble) => {
     if (m.id.startsWith("local-")) return; // not persisted yet — nothing to hit
     const nextEmoji = m.userTapback ? null : "❤️";
     setMessages((ms) =>
@@ -368,7 +359,34 @@ export default function ChatClient() {
         ms.map((b) => (b.id === m.id ? { ...b, userTapback: m.userTapback } : b))
       );
     }
-  }
+  }, []);
+
+  /** Taps on her bubbles: double-tap toggles ❤️; on photos a single tap opens
+   *  the image after a short grace window the second tap cancels. */
+  const tapHer = useCallback(
+    (m: Bubble) => {
+      const t = Date.now();
+      if (lastTapRef.current?.id === m.id && t - lastTapRef.current.t < 350) {
+        lastTapRef.current = null;
+        if (openTimerRef.current) {
+          clearTimeout(openTimerRef.current);
+          openTimerRef.current = null;
+        }
+        void reactTo(m);
+        return;
+      }
+      lastTapRef.current = { id: m.id, t };
+      if (m.media?.url) {
+        if (openTimerRef.current) clearTimeout(openTimerRef.current);
+        const url = m.media.url;
+        openTimerRef.current = setTimeout(() => {
+          window.open(url, "_blank", "noreferrer");
+          openTimerRef.current = null;
+        }, 350);
+      }
+    },
+    [reactTo]
+  );
 
   function send(e: FormEvent) {
     e.preventDefault();
@@ -423,6 +441,27 @@ export default function ChatClient() {
 
       {/* messages */}
       <div className="flex-1 overflow-y-auto px-3 py-4">
+        {returning && (
+          <div className="mx-auto mb-3 flex max-w-xs items-center gap-2 rounded-full bg-neutral-100 px-4 py-2 text-[12px] text-neutral-500">
+            <span className="flex-1">
+              welcome back — this is a fresh guest chat.{" "}
+              <a href="/auth" className="font-medium text-[#0a84ff]">
+                log in
+              </a>{" "}
+              to get your thread back
+            </span>
+            <button
+              aria-label="Dismiss"
+              onClick={() => {
+                sessionStorage.setItem("hj_wb_hidden", "1");
+                setReturning(false);
+              }}
+              className="text-neutral-400 hover:text-neutral-600"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-neutral-400">…</div>
         ) : guestFailed ? (
@@ -523,6 +562,7 @@ export default function ChatClient() {
         onDismiss={() => setClaimOpen(false)}
         onClaimed={() => {
           setAnonymous(false);
+          localStorage.removeItem("hj_returning");
           setClaimOpen(false);
           const text = blockedTextRef.current;
           blockedTextRef.current = null;

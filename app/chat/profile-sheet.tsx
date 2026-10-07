@@ -77,6 +77,9 @@ function SheetInner({
   }
 
   async function signOut() {
+    // Mark that this device had a real account — if they come back as a
+    // guest, the chat banner offers the way back to their thread.
+    localStorage.setItem("hj_returning", "1");
     await getBrowserSupabase().auth.signOut();
     router.replace("/auth");
   }
@@ -270,6 +273,15 @@ function SheetInner({
         {/* quiet footer — the way out to the site */}
         <div className="mt-6 flex items-center justify-center gap-3 pb-6 text-[11px] text-neutral-400">
           <Link href="/about" className="hover:text-neutral-600">about josefine</Link>
+          <span aria-hidden>·</span>
+          <a
+            href="https://www.instagram.com/fine__josie/"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-neutral-600"
+          >
+            instagram
+          </a>
           <span aria-hidden>·</span>
           <Link href="/privacy" className="hover:text-neutral-600">privacy</Link>
           <span aria-hidden>·</span>

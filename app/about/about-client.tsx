@@ -101,6 +101,15 @@ export default function AboutClient() {
       <footer className="absolute bottom-6 z-10 flex items-center gap-3 text-[11px] text-white/40">
         <span>an ai companion</span>
         <span aria-hidden>·</span>
+        <a
+          href="https://www.instagram.com/fine__josie/"
+          target="_blank"
+          rel="noreferrer"
+          className="hover:text-white/70"
+        >
+          instagram
+        </a>
+        <span aria-hidden>·</span>
         <Link href="/privacy" className="hover:text-white/70">privacy</Link>
         <span aria-hidden>·</span>
         <Link href="/terms" className="hover:text-white/70">terms</Link>

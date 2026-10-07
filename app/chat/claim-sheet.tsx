@@ -154,6 +154,9 @@ function Inner({
                 log in
               </Link>
             </p>
+            <p className="text-center text-[11px] text-neutral-400">
+              18+ · she&apos;s an ai, not a real person
+            </p>
             <button
               type="button"
               onClick={onDismiss}

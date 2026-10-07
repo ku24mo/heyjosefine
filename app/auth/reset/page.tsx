@@ -48,7 +48,7 @@ export default function ResetPage() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-neutral-950 px-6 text-neutral-100">
       <div className="w-full max-w-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold">New password</h1>
+        <h1 className="mb-6 text-center text-xl font-semibold">new password</h1>
         {ready === null ? (
           <div className="text-center text-sm text-neutral-500">…</div>
         ) : (
@@ -87,7 +87,7 @@ export default function ResetPage() {
               disabled={busy}
               className="w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm font-medium text-neutral-950 transition hover:bg-white disabled:opacity-50"
             >
-              {busy ? "…" : "Update password"}
+              {busy ? "…" : "update password"}
             </button>
             {error && <p className="text-center text-sm text-red-400">{error}</p>}
           </form>
