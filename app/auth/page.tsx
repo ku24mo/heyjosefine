@@ -102,6 +102,8 @@ function AuthInner() {
     if (claiming) {
       // Same in-place conversion as the claim sheet — the user_id (and every
       // message/memory hanging off it) carries over to the claimed account.
+      // Intent flag first: confirmation may happen on another device.
+      await fetch("/api/auth/claim-intent", { method: "POST" }).catch(() => {});
       const { data, error } = await sb.auth.updateUser(
         { email, password },
         { emailRedirectTo: `${location.origin}/auth/callback` }
@@ -120,7 +122,10 @@ function AuthInner() {
       if (data.user?.is_anonymous) {
         // Confirm-email on: they stay anonymous until the link is tapped.
         // Flag it so chat completes the usage reset on the next real mount.
-        localStorage.setItem("hj_pending_claim", email);
+        localStorage.setItem(
+          "hj_pending_claim",
+          JSON.stringify({ email, uid: data.user.id })
+        );
         setNotice(
           "check your email — tap the link to keep this conversation (check spam too)"
         );

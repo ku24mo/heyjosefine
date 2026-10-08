@@ -96,6 +96,13 @@ const { data: u } = await authed.auth.getUser(sess.access_token);
 check("user is anonymous", u.user?.is_anonymous === true, JSON.stringify(u.user?.is_anonymous));
 const uid = u.user!.id;
 
+// 1b. second guest call must be a no-op — two tabs racing bootstrap would
+// otherwise mint a second anon user and split the conversation.
+const g2 = await api("/api/auth/guest", { method: "POST" });
+check("second /api/auth/guest → 200 no-op", g2.status === 200, `got ${g2.status}`);
+const u2 = await authed.auth.getUser(decodeSession().access_token);
+check("same user after second guest call", u2.data.user?.id === uid, `${u2.data.user?.id} vs ${uid}`);
+
 // 2. authenticated surface
 const hist = await api("/api/history");
 check("GET /api/history → 200 as guest", hist.status === 200, `got ${hist.status}`);
@@ -126,9 +133,11 @@ const c2 = await chat("one more");
 const c2j = (await c2.json().catch(() => ({}))) as { claim?: boolean };
 check("over guest cap → 403 + claim:true", c2.status === 403 && c2j.claim === true, `got ${c2.status} ${JSON.stringify(c2j).slice(0, 200)}`);
 
-// 7. claim: same flow as claim-sheet (setSession from cookie, then updateUser)
+// 7. claim: same flow as claim-sheet (intent flag → updateUser)
 const claimClient = createClient(URL_, ANON, { auth: { persistSession: false } });
 await claimClient.auth.setSession(sess);
+const intent = await api("/api/auth/claim-intent", { method: "POST" });
+check("POST /api/auth/claim-intent → 200", intent.status === 200, `got ${intent.status}`);
 const email = `e2e-${Date.now()}@example.com`;
 const { data: claimed, error: claimErr } = await claimClient.auth.updateUser({ email, password: "TestPass123!" });
 check("updateUser claim succeeds", !claimErr, claimErr?.message ?? "");
@@ -152,9 +161,10 @@ const { data: login, error: loginErr } = await loginClient.auth.signInWithPasswo
 check("password login works post-claim", !loginErr && Boolean(login.session), loginErr?.message ?? "");
 if (login.session) storeSession(login.session);
 
-// 9. /api/auth/claimed wipes guest usage
+// 9. /api/auth/claimed wipes guest usage (claim_pending gates it)
 const cl = await api("/api/auth/claimed", { method: "POST" });
-check("POST /api/auth/claimed → 200", cl.status === 200, `got ${cl.status}`);
+const clj = (await cl.clone().json().catch(() => ({}))) as { wiped?: boolean };
+check("POST /api/auth/claimed → 200 + wiped", cl.status === 200 && clj.wiped === true, `got ${cl.status} ${JSON.stringify(clj)}`);
 const { data: usageRows } = await service.from("usage").select("message_count").eq("user_id", uid);
 check("guest usage wiped", (usageRows?.length ?? -1) === 0, JSON.stringify(usageRows));
 

@@ -92,6 +92,8 @@ export default function ChatClient() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   /** Double-tap detector for reacting to her bubbles. */
   const lastTapRef = useRef<{ id: string; t: number } | null>(null);
+  /** Boot-time session identity — the auth listener resyncs on swaps. */
+  const bootUserRef = useRef<{ id: string; anon: boolean } | null>(null);
   /** Single-tap on a photo opens it after a grace window a double-tap can cancel. */
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -184,8 +186,21 @@ export default function ChatClient() {
 
   const loadHistory = useCallback(async () => {
     const res = await fetch("/api/history");
+    let payload: {
+      claimPending?: boolean;
+      [k: string]: unknown;
+    } | null = null;
     if (res.ok) {
-      const { messages, plan: p, relationship } = await res.json();
+      payload = await res.json();
+      const { messages, plan: p, relationship } = payload as {
+        messages: (Bubble & { user_tapback?: string | null })[];
+        plan?: "free" | "unlimited";
+        relationship?: {
+          knownSince: string | null;
+          daysKnown: number;
+          stage: string;
+        } | null;
+      };
       setMessages(
         messages.map((m: Bubble & { user_tapback?: string | null }) => ({
           ...m,
@@ -198,6 +213,7 @@ export default function ChatClient() {
       if (lastHer?.created_at) setLastSeenAt(lastHer.created_at);
     }
     setLoading(false);
+    return payload;
   }, []);
 
   const tryOpening = useCallback(async () => {
@@ -261,6 +277,9 @@ export default function ChatClient() {
         ({ data: { user } } = await getBrowserSupabase().auth.getUser());
       }
       setAnonymous(user?.is_anonymous === true);
+      bootUserRef.current = user
+        ? { id: user.id, anon: user.is_anonymous === true }
+        : null;
       // Signed-out returner who just minted a fresh guest — their real thread
       // is a login away; a quiet banner offers the path back. Clears itself
       // the moment a real session mounts (login or claim).
@@ -273,28 +292,32 @@ export default function ChatClient() {
         }
       } else {
         localStorage.removeItem("hj_returning");
-        // A claim that was waiting on email confirmation — now that a real
-        // session mounted, finish the usage wipe it couldn't do while anon.
-        if (localStorage.getItem("hj_pending_claim")) {
+      }
+      const hist = await loadHistory();
+      if (user && !user.is_anonymous) {
+        // Finish a claim: the server flag covers cross-device confirms, the
+        // scoped localStorage flag covers same-device. Either way the usage
+        // wipe runs once via /api/auth/claimed (server flag gates it).
+        const flag = readPendingClaimFlag();
+        if (hist?.claimPending === true || flag?.uid === user.id) {
           localStorage.removeItem("hj_pending_claim");
           await fetch("/api/auth/claimed", { method: "POST" }).catch(
             () => {}
           );
         }
-      }
-      await loadHistory();
-      const pending = localStorage.getItem("hj_pending_text");
-      if (pending && !user?.is_anonymous) {
-        localStorage.removeItem("hj_pending_text");
-        try {
-          const { text, at } = JSON.parse(pending) as {
-            text: string;
-            at: number;
-          };
-          // The message that hit the claim wall, before the email round-trip.
-          if (Date.now() - at < 24 * 60 * 60_000) void sendText(text, true);
-        } catch {
-          /* malformed — drop it */
+        // The message that hit the claim wall survives the email round-trip.
+        // Flags are per-device, not per-account — only resend into the same
+        // user's thread or a login into another account leaks it.
+        const raw = localStorage.getItem("hj_pending_text");
+        if (raw) {
+          localStorage.removeItem("hj_pending_text");
+          try {
+            const p = JSON.parse(raw) as { text: string; at: number; uid?: string };
+            if (p.uid === user.id && Date.now() - p.at < 24 * 60 * 60_000)
+              void sendText(p.text, true);
+          } catch {
+            /* malformed — drop it */
+          }
         }
       }
       scrollToBottom(true); // open at the newest message, not the top
@@ -302,6 +325,38 @@ export default function ChatClient() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Session swaps propagate across tabs — supabase-js shares auth storage.
+  // Login or claim-confirm in another tab rewrites this session mid-chat;
+  // without a listener the next send lands in the wrong user's thread.
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = getBrowserSupabase().auth.onAuthStateChange((event, session) => {
+      const u = session?.user;
+      const boot = bootUserRef.current;
+      if (!u) {
+        if (event === "SIGNED_OUT" && boot) window.location.reload();
+        return;
+      }
+      if (!boot) return; // bootstrap hasn't recorded the user yet
+      if (u.id === boot.id && (u.is_anonymous === true) === boot.anon) return;
+      const swapped = u.id !== boot.id;
+      bootUserRef.current = { id: u.id, anon: u.is_anonymous === true };
+      setAnonymous(bootUserRef.current.anon);
+      if (swapped) {
+        // Another account's session — in-flight guest state doesn't carry.
+        blockedTextRef.current = null;
+        setClaimOpen(false);
+      } else {
+        // Same user, anonymity flipped — their claim just confirmed (another
+        // tab). Finish the usage wipe the pending flag asked for.
+        void fetch("/api/auth/claimed", { method: "POST" }).catch(() => {});
+      }
+      void loadHistory();
+    });
+    return () => subscription.unsubscribe();
+  }, [loadHistory]);
 
   async function sendText(text: string, echoLocal = true) {
     // No send-blocking: he can double-text while she's typing — the server
@@ -332,9 +387,11 @@ export default function ChatClient() {
         // already rendered, and the server never persisted it).
         blockedTextRef.current = text;
         // Persisted too — survives the confirm-email round-trip (page reload).
+        // uid-scoped: a different account mounting this device must not
+        // inherit a stranger's blocked message.
         localStorage.setItem(
           "hj_pending_text",
-          JSON.stringify({ text, at: Date.now() })
+          JSON.stringify({ text, at: Date.now(), uid: bootUserRef.current?.id })
         );
         setClaimOpen(true);
         return;
@@ -501,8 +558,14 @@ export default function ChatClient() {
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-neutral-400">…</div>
         ) : guestFailed ? (
-          <div className="flex h-full items-center justify-center px-8 text-center text-sm text-neutral-400">
+          <div className="flex h-full flex-col items-center justify-center px-8 text-center text-sm text-neutral-400">
             busy right now — try again in a bit
+            <a
+              href="/auth?mode=login"
+              className="mt-3 text-[#0a84ff]"
+            >
+              or log in to an existing account
+            </a>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center px-8 text-center text-sm text-neutral-400">
@@ -608,6 +671,19 @@ export default function ChatClient() {
       />
     </div>
   );
+}
+
+/** Pending-claim flag — `{email, uid}` JSON; tolerates legacy string values. */
+function readPendingClaimFlag(): { email?: string; uid?: string } | null {
+  try {
+    const raw = localStorage.getItem("hj_pending_claim");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed ? parsed : null;
+  } catch {
+    const raw = localStorage.getItem("hj_pending_claim");
+    return raw && raw.includes("@") ? { email: raw } : null;
+  }
 }
 
 const GAP_MS = 60 * 60_000; // timestamp separator after an hour of silence

@@ -31,7 +31,10 @@ function Inner({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState(false);
-  const [sent, setSent] = useState(false);
+  // Reopen after a pending claim → show the confirm state, not a blank form.
+  const [sent, setSent] = useState(
+    () => localStorage.getItem("hj_pending_claim") != null
+  );
 
   async function claim(e: FormEvent) {
     e.preventDefault();
@@ -41,6 +44,9 @@ function Inner({
     }
     setBusy(true);
     setError(null);
+    // Server-side intent flag — survives a cross-device confirm; localStorage
+    // doesn't. /api/auth/claimed gates the usage wipe on it.
+    await fetch("/api/auth/claim-intent", { method: "POST" }).catch(() => {});
     const { data, error } = await getBrowserSupabase().auth.updateUser(
       { email, password },
       { emailRedirectTo: `${location.origin}/auth/callback` }
@@ -54,9 +60,12 @@ function Inner({
     }
     if (data.user?.is_anonymous) {
       // Confirm-email on: still anonymous until the link is tapped — flag it
-      // (with the address, so the sheet can resend) so chat finishes the
-      // usage reset on the next confirmed mount.
-      localStorage.setItem("hj_pending_claim", email);
+      // uid-scoped (a different account on this device must not inherit it)
+      // so chat finishes the usage reset on the next confirmed mount.
+      localStorage.setItem(
+        "hj_pending_claim",
+        JSON.stringify({ email, uid: data.user.id })
+      );
       setSent(true);
       return;
     }

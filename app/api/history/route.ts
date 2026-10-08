@@ -23,7 +23,7 @@ export async function GET() {
     currentPresence(supabase, user.id),
     supabase
       .from("profiles")
-      .select("plan, subscription_status, created_at")
+      .select("plan, subscription_status, created_at, claim_pending")
       .eq("id", user.id)
       .single(),
     getOrCreateState(supabase, user.id),
@@ -45,6 +45,9 @@ export async function GET() {
         profile.data.subscription_status === "trialing")
         ? "unlimited"
         : "free",
+    // Server-side claim flag — survives cross-device confirms; the client
+    // fires /api/auth/claimed once when it sees this on a real session.
+    claimPending: profile.data?.claim_pending === true,
     messages: messages.map((m) => ({
       id: m.id,
       role: m.role,

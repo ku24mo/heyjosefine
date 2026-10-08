@@ -75,8 +75,18 @@ function SheetInner({
       const { data } = await getBrowserSupabase().auth.getUser();
       setAnon(data.user?.is_anonymous === true);
       setAccountEmail(data.user?.email ?? null);
-      const pending = localStorage.getItem("hj_pending_claim");
-      setPendingEmail(data.user?.is_anonymous && pending ? pending : null);
+      // Flag is {email, uid} JSON; legacy values were a bare email or "1".
+      const raw = localStorage.getItem("hj_pending_claim");
+      let pending: string | null = null;
+      if (data.user?.is_anonymous && raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.uid === data.user.id) pending = parsed.email ?? null;
+        } catch {
+          pending = raw.includes("@") ? raw : null;
+        }
+      }
+      setPendingEmail(pending);
     })();
   }, []);
 
