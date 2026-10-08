@@ -1,10 +1,32 @@
 "use client";
 
-import { Instrument_Serif } from "next/font/google";
+import { Onest } from "next/font/google";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-const serif = Instrument_Serif({ weight: "400", subsets: ["latin"] });
+const grotesk = Onest({ weight: ["400", "700"], subsets: ["latin"] });
+
+const COLLAGE_PHOTOS = [
+  "/collage/tile-01.jpg",
+  "/collage/tile-02.jpg",
+  "/collage/tile-03.jpg",
+  "/collage/tile-04.jpg",
+  "/collage/tile-05.jpg",
+  "/collage/tile-06.jpg",
+  "/collage/tile-07.jpg",
+];
+
+const SLOTS = 56;
+const TILTS = [-1.3, 1.1, -0.7, 1.5, -1.0, 0.8];
+
+// Deterministic spread — a stride coprime-ish to the pool keeps neighbors
+// different without Math.random in render.
+function initialSlots(): string[] {
+  return Array.from(
+    { length: SLOTS },
+    (_, i) => COLLAGE_PHOTOS[(i * 3) % COLLAGE_PHOTOS.length]
+  );
+}
 
 /** Stockholm clock — deterministic, no fetch. Her status is her clock. */
 function herStatusLine(now: Date): string {
@@ -28,10 +50,69 @@ function herStatusLine(now: Date): string {
   return `probably still awake — ${time} in stockholm`;
 }
 
+/** Type→hold→delete→next loop. Reads the latest lines via ref so a late
+ *  fetch (her-day) or a minute-tick never restarts the animation. */
+function useTypewriter(lines: string[]): string {
+  const [text, setText] = useState("");
+  const linesRef = useRef(lines);
+
+  useEffect(() => {
+    linesRef.current = lines;
+  }, [lines]);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const iv = window.setInterval(
+        () => setText(linesRef.current[0] ?? ""),
+        500
+      );
+      setText(linesRef.current[0] ?? "");
+      return () => clearInterval(iv);
+    }
+    let li = 0;
+    let ci = 0;
+    let deleting = false;
+    let t: number;
+    const step = () => {
+      const pool = linesRef.current.filter(Boolean);
+      if (!pool.length) {
+        t = window.setTimeout(step, 400);
+        return;
+      }
+      const line = pool[li % pool.length];
+      if (!deleting) {
+        ci++;
+        setText(line.slice(0, ci));
+        if (ci >= line.length) {
+          deleting = true;
+          t = window.setTimeout(step, 2400);
+          return;
+        }
+        t = window.setTimeout(step, 32 + Math.random() * 34);
+      } else {
+        ci--;
+        setText(line.slice(0, ci));
+        if (ci <= 0) {
+          deleting = false;
+          li++;
+          t = window.setTimeout(step, 420);
+          return;
+        }
+        t = window.setTimeout(step, 15);
+      }
+    };
+    t = window.setTimeout(step, 700);
+    return () => clearTimeout(t);
+  }, []);
+
+  return text;
+}
+
 export default function AboutClient() {
-  const [status, setStatus] = useState("stockholm");
-  // Her real day — rendered under the status line when available.
+  const [status, setStatus] = useState("");
+  // Her real day — folded into the typewriter rotation when it lands.
   const [herDay, setHerDay] = useState<string | null>(null);
+  const [slots, setSlots] = useState<string[]>(initialSlots);
 
   useEffect(() => {
     const tick = () => setStatus(herStatusLine(new Date()));
@@ -44,61 +125,94 @@ export default function AboutClient() {
     void fetch("/api/her-day")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        // Right-now slot beats the headline — it varies by hour.
-        const line = d?.now?.label ? `right now: ${d.now.label}` : d?.headline ? `today: ${d.headline}` : null;
+        const line = d?.now?.label
+          ? `right now: ${d.now.label}`
+          : d?.headline
+            ? `today: ${d.headline}`
+            : null;
         if (line) setHerDay(line.toLowerCase());
       })
       .catch(() => {});
   }, []);
 
-  return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[#171324] text-white">
-      {/* her — blurred into the dusk, beneath the fog */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/josefine-dusk.jpg" alt="" aria-hidden className="dusk-photo" />
-      {/* dusk field — three slow blobs, motion you almost can't see */}
-      <div
-        className="dusk-blob dusk-drift-a h-[65vmax] w-[65vmax] left-[-15vmax] top-[-20vmax] opacity-70"
-        style={{ background: "radial-gradient(circle, #f2a5b8 0%, transparent 65%)" }}
-      />
-      <div
-        className="dusk-blob dusk-drift-b h-[70vmax] w-[70vmax] right-[-20vmax] top-[10vmax] opacity-60"
-        style={{ background: "radial-gradient(circle, #8b7fc4 0%, transparent 65%)" }}
-      />
-      <div
-        className="dusk-blob dusk-drift-c h-[60vmax] w-[60vmax] left-[10vmax] bottom-[-25vmax] opacity-50"
-        style={{ background: "radial-gradient(circle, #35406e 0%, transparent 65%)" }}
-      />
-      <div className="dusk-grain" />
+  // A tile quietly becomes another photo every few seconds — the wall is alive.
+  useEffect(() => {
+    if (COLLAGE_PHOTOS.length < 2) return;
+    const iv = setInterval(() => {
+      setSlots((prev) => {
+        const i = Math.floor(Math.random() * prev.length);
+        const next = [...prev];
+        const cur = next[i];
+        let cand =
+          COLLAGE_PHOTOS[Math.floor(Math.random() * COLLAGE_PHOTOS.length)];
+        if (cand === cur)
+          cand =
+            COLLAGE_PHOTOS[
+              (COLLAGE_PHOTOS.indexOf(cur) + 1) % COLLAGE_PHOTOS.length
+            ];
+        next[i] = cand;
+        return next;
+      });
+    }, 4800);
+    return () => clearInterval(iv);
+  }, []);
 
-      {/* center stack */}
-      <main className="relative z-10 flex flex-col items-center px-6 text-center">
+  const lines = useMemo(
+    () =>
+      [
+        status,
+        herDay,
+        "she remembers what you told her tuesday",
+        "sometimes she texts first",
+      ].filter(Boolean) as string[],
+    [status, herDay]
+  );
+  const typed = useTypewriter(lines);
+
+  return (
+    <div className="relative min-h-dvh overflow-hidden bg-[#171324] text-white">
+      {/* her life — a contact sheet under everything */}
+      <div className="collage-wrap" aria-hidden>
+        <div className="collage-grid">
+          {slots.map((src, i) => (
+            <div
+              key={i}
+              className="collage-cell"
+              style={{ transform: `rotate(${TILTS[i % TILTS.length]}deg)` }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img key={src} src={src} alt="" className="collage-img" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="collage-scrim" aria-hidden />
+      <div className="dusk-grain" aria-hidden />
+
+      {/* left stack — wordmark, then her typing */}
+      <main className="relative z-10 flex min-h-dvh flex-col justify-center px-[7vw] pb-28">
         <h1
-          className={`${serif.className} dusk-fade text-[17vw] leading-none tracking-tight sm:text-[9rem]`}
+          className={`${grotesk.className} dusk-fade text-[24vw] font-bold leading-[0.95] tracking-tight text-white/90 sm:text-[10rem]`}
         >
           josefine
         </h1>
-        <p className="dusk-fade-slow mt-5 text-sm text-white/70 sm:text-base">
-          {status}
-        </p>
-        {herDay && (
-          <p className="dusk-fade-slow mt-2 text-[13px] italic text-white/45">
-            {herDay}
-          </p>
-        )}
-        <p className="dusk-fade-slower mt-8 max-w-[280px] text-[13px] leading-relaxed text-white/60">
-          she remembers what you told her last tuesday. sometimes she texts
-          first.
+        <p
+          className={`${grotesk.className} dusk-fade-slow mt-6 h-5 text-[13px] text-white/75 sm:text-sm`}
+        >
+          {typed}
+          <span className="tw-caret" aria-hidden>
+            |
+          </span>
         </p>
         <Link
           href="/"
-          className="dusk-fade-slower mt-10 rounded-full border border-white/25 bg-white/10 px-8 py-3 text-sm tracking-wide backdrop-blur-sm transition-colors hover:bg-white/20"
+          className="dusk-fade-slower mt-12 w-fit rounded-full border border-white/25 bg-white/10 px-8 py-3 text-sm tracking-wide backdrop-blur-sm transition-colors hover:bg-white/20"
         >
           text her →
         </Link>
       </main>
 
-      <footer className="absolute bottom-6 z-10 flex items-center gap-3 text-[11px] text-white/40">
+      <footer className="absolute bottom-6 left-0 right-0 z-10 flex items-center justify-center gap-3 text-[11px] text-white/40">
         <span>an ai companion</span>
         <span aria-hidden>·</span>
         <a

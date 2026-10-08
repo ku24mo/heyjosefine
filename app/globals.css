@@ -179,53 +179,64 @@ body {
   animation: sheet-backdrop 0.2s ease-out;
 }
 
-/* ── /about — the dusk field ────────────────────────────────────────────── */
+/* ── /about — the life collage ──────────────────────────────────────────── */
 
-@keyframes dusk-drift-a {
-  0%, 100% { transform: translate(0%, 0%) scale(1); }
-  33% { transform: translate(6%, -8%) scale(1.12); }
-  66% { transform: translate(-5%, 4%) scale(0.94); }
-}
-@keyframes dusk-drift-b {
-  0%, 100% { transform: translate(0%, 0%) scale(1); }
-  40% { transform: translate(-7%, 6%) scale(1.1); }
-  75% { transform: translate(5%, -5%) scale(0.9); }
-}
-@keyframes dusk-drift-c {
-  0%, 100% { transform: translate(0%, 0%); }
-  50% { transform: translate(4%, 9%); }
-}
-.dusk-blob {
+/* Oversized by 6% so rotated tiles never expose the page edge. */
+.collage-wrap {
   position: absolute;
-  border-radius: 9999px;
-  filter: blur(80px);
-  pointer-events: none;
-  will-change: transform;
+  inset: -6%;
+  overflow: hidden;
 }
-.dusk-drift-a { animation: dusk-drift-a 48s ease-in-out infinite; }
-.dusk-drift-b { animation: dusk-drift-b 61s ease-in-out infinite; }
-.dusk-drift-c { animation: dusk-drift-c 43s ease-in-out infinite; }
-
-/* Her — the photo dissolved into the field. Blurred, pulled toward the violet
-   palette, edges masked away so there's no rectangle — she emerges from the
-   fog rather than sitting on top of it. */
-@keyframes dusk-breathe {
-  from { transform: scale(1.02); }
-  to { transform: scale(1.09) translateX(-1.5%); }
+.collage-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  height: 100%;
+  align-content: start;
 }
-.dusk-photo {
-  position: absolute;
-  inset: 0;
+@media (min-width: 640px) {
+  .collage-grid { grid-template-columns: repeat(7, 1fr); }
+}
+.collage-cell {
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 10px;
+}
+.collage-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 72% 50%;
-  opacity: 0.42;
-  filter: blur(3.5px) saturate(0.72) brightness(0.7);
-  -webkit-mask-image: radial-gradient(ellipse 80% 72% at 68% 42%, black 30%, transparent 72%);
-  mask-image: radial-gradient(ellipse 80% 72% at 68% 42%, black 30%, transparent 72%);
-  animation: dusk-breathe 70s ease-in-out infinite alternate;
+  display: block;
+}
+/* Tile swap: the new img remounts and fades in over the old cell. */
+@keyframes collage-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.collage-img { animation: collage-in 0.9s ease both; }
+
+/* Legibility veil — heavier top-left where the wordmark lives. */
+.collage-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    155deg,
+    rgba(13, 10, 20, 0.8) 0%,
+    rgba(13, 10, 20, 0.52) 42%,
+    rgba(13, 10, 20, 0.62) 100%
+  );
   pointer-events: none;
+}
+
+/* Typewriter caret — hard blink, like the terminal. */
+@keyframes tw-blink {
+  50% { opacity: 0; }
+}
+.tw-caret {
+  display: inline-block;
+  margin-left: 2px;
+  opacity: 0.7;
+  animation: tw-blink 1.05s steps(1) infinite;
 }
 
 /* Film grain — keeps the gradient from looking flat-digital. */
