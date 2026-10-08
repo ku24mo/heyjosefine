@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CONFIG } from "@/lib/config";
@@ -62,6 +62,43 @@ function SheetInner({
   const [confirming, setConfirming] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Auth state refreshes on mount (sheet remounts per open) — the prop is
+  // only the bootstrap-time guess and goes stale across email confirmation.
+  const [anon, setAnon] = useState(anonymous);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
+  const [pwSent, setPwSent] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await getBrowserSupabase().auth.getUser();
+      setAnon(data.user?.is_anonymous === true);
+      setAccountEmail(data.user?.email ?? null);
+      const pending = localStorage.getItem("hj_pending_claim");
+      setPendingEmail(data.user?.is_anonymous && pending ? pending : null);
+    })();
+  }, []);
+
+  async function resendClaim() {
+    if (!pendingEmail) return;
+    setResent(false);
+    // Re-requesting the email change re-sends the confirmation link.
+    await getBrowserSupabase()
+      .auth.updateUser({ email: pendingEmail })
+      .catch(() => {});
+    setResent(true);
+  }
+
+  async function changePassword() {
+    if (!accountEmail || pwSent) return;
+    setPwSent(true);
+    await getBrowserSupabase()
+      .auth.resetPasswordForEmail(accountEmail, {
+        redirectTo: `${location.origin}/auth/callback?next=/auth/reset`,
+      })
+      .catch(() => {});
+  }
 
   async function deleteConversation() {
     if (!confirming) {
@@ -156,62 +193,122 @@ function SheetInner({
           )}
         </div>
 
-        {/* premium */}
-        <div className="px-4">
-          {anonymous ? (
-            <button
-              onClick={onClaim}
-              className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
-                ★
-              </span>
-              <span className="flex-1">
-                <span className="block text-[15px] font-medium">Claim your account</span>
-                <span className="block text-[12px] text-neutral-500">
-                  keep this conversation — email + password
+        {/* membership */}
+        <div className="space-y-px px-4">
+          {anon && pendingEmail ? (
+            <div className="rounded-xl bg-white px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#0a84ff] text-[13px] text-white">
+                  ✉
                 </span>
-              </span>
-              <span className="text-neutral-300">›</span>
-            </button>
-          ) : plan === "unlimited" ? (
-            <button
-              onClick={async () => {
-                const res = await fetch("/api/billing-portal", { method: "POST" });
-                const d = await res.json();
-                if (d.url) window.location.href = d.url;
-              }}
-              className="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
-                ★
-              </span>
-              <span className="flex-1">
-                <span className="block text-[15px] font-medium">Josefine Unlimited</span>
-                <span className="block text-[12px] text-neutral-500">active — manage subscription</span>
-              </span>
-              <span className="text-neutral-300">›</span>
-            </button>
+                <span className="flex-1">
+                  <span className="block text-[15px] font-medium">
+                    confirm your email
+                  </span>
+                  <span className="block text-[12px] text-neutral-500">
+                    sent to {pendingEmail} — check spam
+                  </span>
+                </span>
+              </div>
+              <div className="mt-2 flex gap-4 pl-10 text-[13px] text-[#0a84ff]">
+                <button type="button" onClick={resendClaim}>
+                  {resent ? "sent again — check spam" : "resend"}
+                </button>
+                <button type="button" onClick={onClaim} className="text-neutral-400">
+                  wrong email?
+                </button>
+              </div>
+            </div>
+          ) : anon ? (
+            <>
+              <button
+                onClick={onClaim}
+                className="flex w-full items-center gap-3 rounded-t-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
+                  ★
+                </span>
+                <span className="flex-1">
+                  <span className="block text-[15px] font-medium">Claim your account</span>
+                  <span className="block text-[12px] text-neutral-500">
+                    keep this conversation — email + password
+                  </span>
+                </span>
+                <span className="text-neutral-300">›</span>
+              </button>
+              <Link
+                href="/auth"
+                className="flex w-full items-center gap-3 rounded-b-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-neutral-400 text-[13px] text-white">
+                  →
+                </span>
+                <span className="flex-1">
+                  <span className="block text-[15px] font-medium">Log in</span>
+                  <span className="block text-[12px] text-neutral-500">
+                    have an account? it&apos;ll open your own thread
+                  </span>
+                </span>
+                <span className="text-neutral-300">›</span>
+              </Link>
+            </>
           ) : (
-            <Link
-              href="/paywall"
-              className="flex items-center gap-3 rounded-xl bg-white px-4 py-3.5 active:bg-neutral-100"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
-                ★
-              </span>
-              <span className="flex-1 text-left">
-                <span className="block text-[15px] font-medium">Josefine Unlimited</span>
-                <span className="block text-[12px] text-neutral-500">{CONFIG.billing.monthlyUsd} / month</span>
-              </span>
-              <span className="text-neutral-300">›</span>
-            </Link>
+            <>
+              <div className="flex items-center gap-3 rounded-t-xl bg-white px-4 py-3.5">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-neutral-400 text-[13px] text-white">
+                  @
+                </span>
+                <span className="flex-1">
+                  <span className="block text-[15px] font-medium">
+                    {accountEmail ?? "your account"}
+                  </span>
+                  <span className="block text-[12px] text-neutral-500">
+                    signed in · {plan === "unlimited" ? "unlimited" : "free"}
+                  </span>
+                </span>
+              </div>
+              {plan === "unlimited" ? (
+                <button
+                  onClick={async () => {
+                    const res = await fetch("/api/billing-portal", { method: "POST" });
+                    const d = await res.json();
+                    if (d.url) window.location.href = d.url;
+                  }}
+                  className="flex w-full items-center gap-3 rounded-b-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
+                    ★
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-[15px] font-medium">Josefine Unlimited</span>
+                    <span className="block text-[12px] text-neutral-500">active — manage subscription</span>
+                  </span>
+                  <span className="text-neutral-300">›</span>
+                </button>
+              ) : (
+                <Link
+                  href="/paywall"
+                  className="flex items-center gap-3 rounded-b-xl bg-white px-4 py-3.5 active:bg-neutral-100"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-rose-400 to-amber-300 text-[13px] text-white">
+                    ★
+                  </span>
+                  <span className="flex-1 text-left">
+                    <span className="block text-[15px] font-medium">Josefine Unlimited</span>
+                    <span className="block text-[12px] text-neutral-500">{CONFIG.billing.monthlyUsd} / month</span>
+                  </span>
+                  <span className="text-neutral-300">›</span>
+                </Link>
+              )}
+            </>
           )}
         </div>
 
         {/* settings */}
-        <div className="mt-4 px-4">
-          <div className="flex items-center gap-3 rounded-xl bg-white px-4 py-3.5">
+        <div className="mt-4 space-y-px px-4">
+          <div
+            className={`flex items-center gap-3 bg-white px-4 py-3.5 ${anon ? "rounded-xl" : "rounded-t-xl"}`}
+          >
             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#34c759] text-[13px] text-white">
               ♪
             </span>
@@ -231,44 +328,59 @@ function SheetInner({
               />
             </button>
           </div>
+          {!anon && (
+            <button
+              onClick={changePassword}
+              disabled={pwSent}
+              className="flex w-full items-center gap-3 rounded-b-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100 disabled:opacity-60"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#5856d6] text-[13px] text-white">
+                ✻
+              </span>
+              <span className="flex-1">
+                <span className="block text-[15px] font-medium">
+                  Change Password
+                </span>
+                <span className="block text-[12px] text-neutral-500">
+                  {pwSent
+                    ? "reset link sent — check spam"
+                    : "emails you a reset link"}
+                </span>
+              </span>
+            </button>
+          )}
         </div>
 
-        {/* destructive */}
-        <div className="mt-4 space-y-px px-4">
-          <button
-            onClick={deleteConversation}
-            disabled={busy}
-            className="w-full rounded-t-xl bg-white px-4 py-3.5 text-left text-[15px] text-[#ff3b30] active:bg-neutral-100 disabled:opacity-50"
-          >
-            {confirming
-              ? "Tap again — she'll still know you, but the thread is gone"
-              : "Delete Conversation"}
-          </button>
-          <button
-            onClick={deleteAccount}
-            disabled={busy}
-            className="w-full bg-white px-4 py-3.5 text-left text-[15px] text-[#ff3b30] active:bg-neutral-100 disabled:opacity-50"
-          >
-            {confirmingDelete
-              ? "Tap again — account and everything she knows, gone"
-              : "Delete Account"}
-          </button>
-          {anonymous ? (
+        {/* destructive — claimed accounts only; a guest's thread is already
+            ephemeral, so there's nothing to destroy but the claim path */}
+        {!anon && (
+          <div className="mt-4 space-y-px px-4">
             <button
-              onClick={onClaim}
-              className="w-full rounded-b-xl bg-white px-4 py-3.5 text-left text-[15px] text-[#0a84ff] active:bg-neutral-100"
+              onClick={deleteConversation}
+              disabled={busy}
+              className="w-full rounded-t-xl bg-white px-4 py-3.5 text-left text-[15px] text-[#ff3b30] active:bg-neutral-100 disabled:opacity-50"
             >
-              Claim Account — sign out would lose this thread
+              {confirming
+                ? "Tap again — she'll still know you, but the thread is gone"
+                : "Delete Conversation"}
             </button>
-          ) : (
+            <button
+              onClick={deleteAccount}
+              disabled={busy}
+              className="w-full bg-white px-4 py-3.5 text-left text-[15px] text-[#ff3b30] active:bg-neutral-100 disabled:opacity-50"
+            >
+              {confirmingDelete
+                ? "Tap again — account and everything she knows, gone"
+                : "Delete Account"}
+            </button>
             <button
               onClick={signOut}
               className="w-full rounded-b-xl bg-white px-4 py-3.5 text-left text-[15px] text-[#ff3b30] active:bg-neutral-100"
             >
               Sign Out
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* quiet footer — the way out to the site */}
         <div className="mt-6 flex items-center justify-center gap-3 pb-6 text-[11px] text-neutral-400">

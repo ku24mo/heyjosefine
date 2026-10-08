@@ -456,7 +456,16 @@ export default function ChatClient() {
         </div>
         <button
           aria-label="About Josefine"
-          onClick={() => setSheetOpen(true)}
+          onClick={() => {
+            setSheetOpen(true);
+            // is_anonymous can flip mid-session (claim confirmed in another
+            // tab) — refresh so the sheet never shows a stale "claim" row.
+            void getBrowserSupabase()
+              .auth.getUser()
+              .then(({ data }) =>
+                setAnonymous(data.user?.is_anonymous === true)
+              );
+          }}
           className="flex w-9 items-center justify-center p-1.5 text-[#0a84ff]"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>

@@ -54,8 +54,9 @@ function Inner({
     }
     if (data.user?.is_anonymous) {
       // Confirm-email on: still anonymous until the link is tapped — flag it
-      // so chat finishes the usage reset on the next confirmed mount.
-      localStorage.setItem("hj_pending_claim", "1");
+      // (with the address, so the sheet can resend) so chat finishes the
+      // usage reset on the next confirmed mount.
+      localStorage.setItem("hj_pending_claim", email);
       setSent(true);
       return;
     }
@@ -106,7 +107,7 @@ function Inner({
           <>
             <div className="mt-5 rounded-xl bg-white px-4 py-4 text-center text-[14px] text-neutral-600">
               check your email — tap the link and this conversation stays
-              yours.
+              yours. check spam if you don&apos;t see it.
             </div>
             <button
               type="button"

@@ -93,7 +93,7 @@ function AuthInner() {
       });
       setLoading(false);
       if (error) setError(friendly(error.message));
-      else setNotice("check your email — reset link sent");
+      else setNotice("check your email — reset link sent (check spam too)");
       return;
     }
 
@@ -112,8 +112,10 @@ function AuthInner() {
       if (data.user?.is_anonymous) {
         // Confirm-email on: they stay anonymous until the link is tapped.
         // Flag it so chat completes the usage reset on the next real mount.
-        localStorage.setItem("hj_pending_claim", "1");
-        setNotice("check your email — tap the link to keep this conversation");
+        localStorage.setItem("hj_pending_claim", email);
+        setNotice(
+          "check your email — tap the link to keep this conversation (check spam too)"
+        );
         return;
       }
       await fetch("/api/auth/claimed", { method: "POST" }).catch(() => {});
@@ -140,7 +142,9 @@ function AuthInner() {
     if (mode === "signup" && !data.session) {
       // Email confirmation is off today, but if it ever flips on we say so
       // instead of silently minting a fresh guest over the new account.
-      setNotice("check your email — confirm your account to keep chatting");
+      setNotice(
+        "check your email — confirm your account to keep chatting (check spam too)"
+      );
       return;
     }
     done();
