@@ -6,20 +6,28 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const grotesk = Onest({ weight: ["400", "700"], subsets: ["latin"] });
 
-// 88 square + every-5th portrait tiles — regenerate via scripts/make-collage-tiles.py
+// 88 photos — every 5th is a 3:4 portrait tile (ptile-*); those indices are
+// excluded from the square pool so a photo never appears twice at once.
+// Regenerate via scripts/make-collage-tiles.py
 const SQ_COUNT = 88;
+const PORTRAIT_IDX = new Set(
+  Array.from({ length: Math.floor(SQ_COUNT / 5) }, (_, i) => (i + 1) * 5)
+);
+const tile = (n: number) => `/collage/tile-${String(n).padStart(2, "0")}.jpg`;
+const ptile = (n: number) => `/collage/ptile-${String(n).padStart(2, "0")}.jpg`;
 const COLLAGE_SQUARE = Array.from(
   { length: SQ_COUNT },
-  (_, i) => `/collage/tile-${String(i + 1).padStart(2, "0")}.jpg`
-);
-const COLLAGE_PORTRAIT = Array.from(
-  { length: Math.floor(SQ_COUNT / 5) },
-  (_, i) => `/collage/ptile-${String((i + 1) * 5).padStart(2, "0")}.jpg`
-);
+  (_, i) => i + 1
+)
+  .filter((n) => !PORTRAIT_IDX.has(n))
+  .map(tile);
+const COLLAGE_PORTRAIT = [...PORTRAIT_IDX].map(ptile);
 
-const COLS = 5;
-// Per-column drift durations — different speeds = parallax depth.
-const DURS = [96, 136, 82, 118, 150];
+const COLS = 7;
+// Per-column drift durations + negative start offsets — different speeds and
+// different scroll positions, so columns never march in lockstep.
+const DURS = [96, 136, 82, 118, 150, 105, 127];
+const START = [0, 38, 61, 17, 74, 29, 50]; // seconds into the loop
 
 interface Tile {
   src: string;
@@ -36,7 +44,7 @@ function columnTiles(col: number): Tile[] {
     items.push({ src, portrait: false });
     if (items.length % 5 === 0) {
       items.push({
-        src: COLLAGE_PORTRAIT[p++ % COLLAGE_PORTRAIT.length],
+        src: COLLAGE_PORTRAIT[(col * 3 + p++) % COLLAGE_PORTRAIT.length],
         portrait: true,
       });
     }
@@ -173,7 +181,10 @@ export default function AboutClient() {
           <div key={c} className={`collage-col${c % 2 ? " down" : ""}`}>
             <div
               className="collage-track"
-              style={{ animationDuration: `${DURS[c % DURS.length]}s` }}
+              style={{
+                animationDuration: `${DURS[c % DURS.length]}s`,
+                animationDelay: `-${START[c % START.length]}s`,
+              }}
             >
               {[...tiles, ...tiles].map((t, i) => (
                 /* eslint-disable-next-line @next/next/no-img-element */

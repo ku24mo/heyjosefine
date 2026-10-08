@@ -197,6 +197,10 @@ body {
   /* 3 columns on phones — density over breadth. */
   .collage-col:nth-child(n + 4) { display: none; }
 }
+@media (min-width: 640px) and (max-width: 1279px) {
+  /* 5 columns on tablets/small laptops, all 7 on wide desktop. */
+  .collage-col:nth-child(n + 6) { display: none; }
+}
 /* Track holds the sequence twice; -50% loops it seamlessly. */
 .collage-track {
   display: flex;
