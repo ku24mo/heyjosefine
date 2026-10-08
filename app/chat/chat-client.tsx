@@ -273,8 +273,30 @@ export default function ChatClient() {
         }
       } else {
         localStorage.removeItem("hj_returning");
+        // A claim that was waiting on email confirmation — now that a real
+        // session mounted, finish the usage wipe it couldn't do while anon.
+        if (localStorage.getItem("hj_pending_claim")) {
+          localStorage.removeItem("hj_pending_claim");
+          await fetch("/api/auth/claimed", { method: "POST" }).catch(
+            () => {}
+          );
+        }
       }
       await loadHistory();
+      const pending = localStorage.getItem("hj_pending_text");
+      if (pending && !user?.is_anonymous) {
+        localStorage.removeItem("hj_pending_text");
+        try {
+          const { text, at } = JSON.parse(pending) as {
+            text: string;
+            at: number;
+          };
+          // The message that hit the claim wall, before the email round-trip.
+          if (Date.now() - at < 24 * 60 * 60_000) void sendText(text, true);
+        } catch {
+          /* malformed — drop it */
+        }
+      }
       scrollToBottom(true); // open at the newest message, not the top
       await tryOpening(); // proactive opener — she may have a reason to text first
     })();
@@ -309,6 +331,11 @@ export default function ChatClient() {
         // successful claim we resend the same text (echoLocal=false — it's
         // already rendered, and the server never persisted it).
         blockedTextRef.current = text;
+        // Persisted too — survives the confirm-email round-trip (page reload).
+        localStorage.setItem(
+          "hj_pending_text",
+          JSON.stringify({ text, at: Date.now() })
+        );
         setClaimOpen(true);
         return;
       }
@@ -563,6 +590,7 @@ export default function ChatClient() {
         onClaimed={() => {
           setAnonymous(false);
           localStorage.removeItem("hj_returning");
+          localStorage.removeItem("hj_pending_text");
           setClaimOpen(false);
           const text = blockedTextRef.current;
           blockedTextRef.current = null;

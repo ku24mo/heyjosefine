@@ -132,10 +132,19 @@ await claimClient.auth.setSession(sess);
 const email = `e2e-${Date.now()}@example.com`;
 const { data: claimed, error: claimErr } = await claimClient.auth.updateUser({ email, password: "TestPass123!" });
 check("updateUser claim succeeds", !claimErr, claimErr?.message ?? "");
-const stillAnon = claimed?.user?.is_anonymous;
-check("user no longer anonymous", stillAnon === false, `is_anonymous=${stillAnon}`);
-check("email bound instantly (confirm-off)", claimed?.user?.email === email, `email=${claimed?.user?.email} new_email=${claimed?.user?.new_email}`);
 check("user_id preserved (data carries)", claimed?.user?.id === uid, `${claimed?.user?.id} vs ${uid}`);
+// Confirm-email on: the user stays anonymous until the link is tapped —
+// simulate the tap via the admin API (no mailbox in a script).
+if (claimed?.user?.is_anonymous) {
+  const { error: confErr } = await service.auth.admin.updateUserById(uid, {
+    email,
+    email_confirm: true,
+  });
+  check("admin email_confirm simulates the tap", !confErr, confErr?.message ?? "");
+}
+const { data: postConfirm } = await service.auth.admin.getUserById(uid);
+check("user no longer anonymous", postConfirm?.user?.is_anonymous === false, `is_anonymous=${postConfirm?.user?.is_anonymous}`);
+check("email bound", postConfirm?.user?.email === email, `email=${postConfirm?.user?.email}`);
 
 // 8. claimed-session cookies: get a fresh real session via password login
 const loginClient = createClient(URL_, ANON, { auth: { persistSession: false } });

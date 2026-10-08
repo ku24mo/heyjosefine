@@ -31,6 +31,7 @@ function Inner({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState(false);
+  const [sent, setSent] = useState(false);
 
   async function claim(e: FormEvent) {
     e.preventDefault();
@@ -40,15 +41,22 @@ function Inner({
     }
     setBusy(true);
     setError(null);
-    const { error } = await getBrowserSupabase().auth.updateUser({
-      email,
-      password,
-    });
+    const { data, error } = await getBrowserSupabase().auth.updateUser(
+      { email, password },
+      { emailRedirectTo: `${location.origin}/auth/callback` }
+    );
     if (error) {
       setBusy(false);
       // Same email on another account → send them to login.
       if (/already|registered|exists/i.test(error.message)) setExisting(true);
       else setError(error.message);
+      return;
+    }
+    if (data.user?.is_anonymous) {
+      // Confirm-email on: still anonymous until the link is tapped — flag it
+      // so chat finishes the usage reset on the next confirmed mount.
+      localStorage.setItem("hj_pending_claim", "1");
+      setSent(true);
       return;
     }
     await fetch("/api/auth/claimed", { method: "POST" }).catch(() => {});
@@ -94,7 +102,21 @@ function Inner({
           </p>
         </div>
 
-        {existing ? (
+        {sent ? (
+          <>
+            <div className="mt-5 rounded-xl bg-white px-4 py-4 text-center text-[14px] text-neutral-600">
+              check your email — tap the link and this conversation stays
+              yours.
+            </div>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="mt-3 w-full rounded-xl bg-[#0a84ff] px-4 py-3 text-[15px] font-medium text-white"
+            >
+              done
+            </button>
+          </>
+        ) : existing ? (
           <>
             <div className="mt-5 rounded-xl bg-white px-4 py-4 text-center text-[14px] text-neutral-600">
               that email already has an account.{" "}

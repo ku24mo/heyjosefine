@@ -23,6 +23,8 @@ function friendly(msg: string): string {
   if (/already registered|already exists/i.test(msg))
     return "that email already has an account — log in instead";
   if (/rate limit|too many/i.test(msg)) return "wait a minute and try again";
+  if (/email.*not confirmed|not.*confirmed/i.test(msg))
+    return "confirm your email first — check your inbox";
   if (/password/i.test(msg) && /at least|characters/i.test(msg))
     return "at least 8 characters";
   return msg;
@@ -98,10 +100,20 @@ function AuthInner() {
     if (claiming) {
       // Same in-place conversion as the claim sheet — the user_id (and every
       // message/memory hanging off it) carries over to the claimed account.
-      const { error } = await sb.auth.updateUser({ email, password });
+      const { data, error } = await sb.auth.updateUser(
+        { email, password },
+        { emailRedirectTo: `${location.origin}/auth/callback` }
+      );
       setLoading(false);
       if (error) {
         setError(friendly(error.message));
+        return;
+      }
+      if (data.user?.is_anonymous) {
+        // Confirm-email on: they stay anonymous until the link is tapped.
+        // Flag it so chat completes the usage reset on the next real mount.
+        localStorage.setItem("hj_pending_claim", "1");
+        setNotice("check your email — tap the link to keep this conversation");
         return;
       }
       await fetch("/api/auth/claimed", { method: "POST" }).catch(() => {});
@@ -111,7 +123,13 @@ function AuthInner() {
 
     const { data, error } =
       mode === "signup"
-        ? await sb.auth.signUp({ email, password })
+        ? await sb.auth.signUp({
+            email,
+            password,
+            options: {
+              emailRedirectTo: `${location.origin}/auth/callback`,
+            },
+          })
         : await sb.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
