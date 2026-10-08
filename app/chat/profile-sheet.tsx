@@ -297,25 +297,30 @@ function SheetInner({
                     signed in · {plan === "unlimited" ? "unlimited" : "free"}
                   </span>
                 </span>
-              </div>
-              {plan === "free" && usage && (
-                <div className="bg-white px-4 py-3">
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="text-neutral-500">messages today</span>
-                    <span className="text-neutral-400">
-                      {usage.usedToday} / {usage.dailyLimit}
+                {plan === "free" && usage && (
+                  <span
+                    className="relative flex h-8 w-8 items-center justify-center"
+                    title={`${usage.usedToday} of ${usage.dailyLimit} messages today`}
+                    aria-label={`${usage.usedToday} of ${usage.dailyLimit} messages today`}
+                  >
+                    <svg viewBox="0 0 32 32" className="h-8 w-8 -rotate-90">
+                      <circle
+                        cx="16" cy="16" r="13" fill="none" strokeWidth="4"
+                        className="stroke-neutral-200"
+                      />
+                      <circle
+                        cx="16" cy="16" r="13" fill="none" strokeWidth="4"
+                        strokeLinecap="round"
+                        className="stroke-[#0a84ff]"
+                        strokeDasharray={`${(Math.min(1, usage.usedToday / usage.dailyLimit) * 81.7).toFixed(1)} 81.7`}
+                      />
+                    </svg>
+                    <span className="absolute text-[7px] font-medium text-neutral-500">
+                      {usage.usedToday}/{usage.dailyLimit}
                     </span>
-                  </div>
-                  <div className="mt-1.5 h-1 rounded-full bg-neutral-100">
-                    <div
-                      className="h-1 rounded-full bg-[#0a84ff]"
-                      style={{
-                        width: `${Math.min(100, (usage.usedToday / usage.dailyLimit) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
+                  </span>
+                )}
+              </div>
               {plan === "unlimited" ? (
                 <button
                   onClick={async () => {
