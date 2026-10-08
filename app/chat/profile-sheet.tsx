@@ -224,7 +224,17 @@ function SheetInner({
                 <button type="button" onClick={resendClaim}>
                   {resent ? "sent again — check spam" : "resend"}
                 </button>
-                <button type="button" onClick={onClaim} className="text-neutral-400">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Otherwise the claim sheet resolves the flag back to the
+                    // confirm state instead of the email form.
+                    localStorage.removeItem("hj_pending_claim");
+                    setPendingEmail(null);
+                    onClaim();
+                  }}
+                  className="text-neutral-400"
+                >
                   wrong email?
                 </button>
               </div>
@@ -239,7 +249,7 @@ function SheetInner({
                   ★
                 </span>
                 <span className="flex-1">
-                  <span className="block text-[15px] font-medium">Claim your account</span>
+                  <span className="block text-[15px] font-medium">Sign up</span>
                   <span className="block text-[12px] text-neutral-500">
                     keep this conversation — email + password
                   </span>

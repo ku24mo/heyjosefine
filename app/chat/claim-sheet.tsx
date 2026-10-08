@@ -31,10 +31,46 @@ function Inner({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState(false);
+  const [resent, setResent] = useState(false);
   // Reopen after a pending claim → show the confirm state, not a blank form.
-  const [sent, setSent] = useState(
-    () => localStorage.getItem("hj_pending_claim") != null
+  // The flag must verify against THIS user — legacy values (bare email, "1")
+  // and other uids' flags are cleared so the sheet can't get stuck here.
+  // undefined = still resolving, null = show the form, string = pending email.
+  const [pendingEmail, setPendingEmail] = useState<string | null | undefined>(
+    undefined
   );
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await getBrowserSupabase().auth.getUser();
+      const raw = localStorage.getItem("hj_pending_claim");
+      let pending: string | null = null;
+      if (data.user?.is_anonymous && raw) {
+        try {
+          const p = JSON.parse(raw);
+          if (p?.uid === data.user.id && typeof p?.email === "string")
+            pending = p.email;
+        } catch {
+          /* legacy bare value — unverifiable, drop it */
+        }
+      }
+      if (!pending) localStorage.removeItem("hj_pending_claim");
+      setPendingEmail(pending);
+    })();
+  }, []);
+
+  async function resend() {
+    if (!pendingEmail) return;
+    setResent(false);
+    // Re-requesting the email change re-sends the confirmation link.
+    await getBrowserSupabase()
+      .auth.updateUser(
+        { email: pendingEmail },
+        { emailRedirectTo: `${location.origin}/auth/callback` }
+      )
+      .catch(() => {});
+    setResent(true);
+  }
 
   async function claim(e: FormEvent) {
     e.preventDefault();
@@ -66,7 +102,8 @@ function Inner({
         "hj_pending_claim",
         JSON.stringify({ email, uid: data.user.id })
       );
-      setSent(true);
+      setBusy(false);
+      setPendingEmail(email);
       return;
     }
     await fetch("/api/auth/claimed", { method: "POST" }).catch(() => {});
@@ -112,11 +149,37 @@ function Inner({
           </p>
         </div>
 
-        {sent ? (
+        {pendingEmail === undefined ? (
+          <div className="mt-5 rounded-xl bg-white px-4 py-4 text-center text-[14px] text-neutral-400">
+            …
+          </div>
+        ) : pendingEmail ? (
           <>
             <div className="mt-5 rounded-xl bg-white px-4 py-4 text-center text-[14px] text-neutral-600">
-              check your email — tap the link and this conversation stays
-              yours. check spam if you don&apos;t see it.
+              check your email — we sent a link to{" "}
+              <span className="font-medium text-black">{pendingEmail}</span>.
+              tap it and this conversation stays yours. check spam if you
+              don&apos;t see it.
+            </div>
+            <div className="mt-3 flex justify-center gap-5 text-[13px]">
+              <button
+                type="button"
+                onClick={resend}
+                className="font-medium text-[#0a84ff]"
+              >
+                {resent ? "sent again — check spam" : "resend"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem("hj_pending_claim");
+                  setResent(false);
+                  setPendingEmail(null);
+                }}
+                className="text-neutral-400"
+              >
+                use a different email
+              </button>
             </div>
             <button
               type="button"
