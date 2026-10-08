@@ -250,7 +250,15 @@ function Inner({
               </Link>
             </p>
             <p className="text-center text-[11px] text-neutral-400">
-              18+ · she&apos;s an ai, not a real person
+              18+ · she&apos;s an ai, not a real person · by continuing you
+              agree to the{" "}
+              <Link href="/terms" className="underline underline-offset-2">
+                terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="underline underline-offset-2">
+                privacy policy
+              </Link>
             </p>
             <button
               type="button"

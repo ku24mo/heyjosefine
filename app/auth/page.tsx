@@ -330,7 +330,15 @@ function AuthInner() {
             keep chatting as a guest
           </Link>
           {" · "}Josefine is an AI, not a real person. 18+. By continuing you
-          agree this is an AI experience inspired by the creator.
+          agree to the{" "}
+          <Link href="/terms" className="text-neutral-400 underline underline-offset-2">
+            terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="text-neutral-400 underline underline-offset-2">
+            privacy policy
+          </Link>{" "}
+          — this is an AI experience inspired by the creator.
         </p>
       </div>
     </main>

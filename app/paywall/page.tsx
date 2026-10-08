@@ -62,6 +62,13 @@ export default function Paywall() {
           {busy ? "redirecting…" : `subscribe — ${CONFIG.billing.monthlyUsd}/mo`}
         </button>
         {err && <div className="mt-2 text-center text-[13px] text-rose-500">{err}</div>}
+        <p className="mt-4 text-center text-[11px] leading-relaxed text-neutral-400">
+          josefine is an AI companion · 18+ · renews monthly, cancel anytime ·
+          by subscribing you agree to the{" "}
+          <Link href="/terms" className="underline underline-offset-2">terms</Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline underline-offset-2">privacy policy</Link>
+        </p>
         <Link
           href="/chat"
           className="mt-4 block text-center text-[13px] text-[#0a84ff]"

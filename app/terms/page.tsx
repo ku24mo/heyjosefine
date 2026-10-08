@@ -20,18 +20,24 @@ export default function TermsPage() {
         </li>
         <li>
           Paid subscriptions ({CONFIG.billing.monthlyUsd}/month) renew monthly via Stripe and can be
-          cancelled anytime — access continues to the end of the period.
+          cancelled anytime — access continues to the end of the paid period;
+          no partial-month refunds.
         </li>
         <li>
-          Don&rsquo;t use the service to harm others, attempt to extract private
-          data, or break the experience for other people.
+          This is a companion service, not an adult one — she declines sexual
+          or explicit content. Don&rsquo;t use it to harm others, attempt to
+          extract private data, or break the experience for other people.
+        </li>
+        <li>
+          The service is provided as-is — it&rsquo;s early days, and
+          availability or features may change.
         </li>
         <li>You can delete your account at any time; your data goes with it.</li>
       </ul>
       <p className="mt-8 text-neutral-400">
         questions → <a href="mailto:hello@heyjosefine.com" className="underline">hello@heyjosefine.com</a>
       </p>
-      <p className="mt-8"><Link href="/" className="text-[#0a84ff]">← back</Link></p>
+      <p className="mt-8"><Link href="/about" className="text-[#0a84ff]">← about josefine</Link></p>
     </div>
   );
 }
