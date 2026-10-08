@@ -28,11 +28,12 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isAuthPage = path.startsWith("/auth");
 
   // Anonymous-first: guests ARE authenticated users — they belong in chat,
-  // never bounced to /auth. Only a *claimed* session shouldn't see /auth.
-  if (user && !user.is_anonymous && isAuthPage) {
+  // never bounced to /auth. Only a *claimed* session shouldn't see the login
+  // form itself — /auth/callback must always run (it exchanges the code) and
+  // /auth/reset must stay reachable (recovery lands with a live session).
+  if (user && !user.is_anonymous && path === "/auth") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
