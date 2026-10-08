@@ -89,6 +89,8 @@ export default function ChatClient() {
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
   /** Message that hit the claim wall — resent once the account is claimed. */
   const blockedTextRef = useRef<string | null>(null);
+  /** Message that failed to reach the server — tap "Not Delivered" to retry. */
+  const [failedText, setFailedText] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   /** Double-tap detector for reacting to her bubbles. */
   const lastTapRef = useRef<{ id: string; t: number } | null>(null);
@@ -400,6 +402,8 @@ export default function ChatClient() {
         setPaywall(true);
         return;
       }
+      if (!res.ok) throw new Error(`chat ${res.status}`);
+      setFailedText(null);
       const data = await res.json();
       if (data.tapback?.emoji) {
         // iMessage-style: her reaction lands on his last bubble.
@@ -422,7 +426,9 @@ export default function ChatClient() {
       await revealBubbles(bubbles, data.media ?? null, data.messageIds);
     } catch {
       setTyping(false);
-      await revealBubbles(["my brain just froze 😅 say that again?"]);
+      // The text never persisted — fake "she didn't get it" replies vanish on
+      // reload anyway. iOS answer: mark it Not Delivered, tap to retry.
+      setFailedText(text);
     }
   }
 
@@ -477,6 +483,15 @@ export default function ChatClient() {
     void sendText(input.trim());
   }
 
+  function openSheet() {
+    setSheetOpen(true);
+    // is_anonymous can flip mid-session (claim confirmed in another tab) —
+    // refresh so the sheet never shows a stale "claim" row.
+    void getBrowserSupabase()
+      .auth.getUser()
+      .then(({ data }) => setAnonymous(data.user?.is_anonymous === true));
+  }
+
   // She's "online" while typing or within the linger window after her last
   // message — and not just because *he* is texting at her.
   const online =
@@ -496,7 +511,12 @@ export default function ChatClient() {
           the center block is in-flow so the header wraps it — nothing clips. */}
       <header className="flex items-center border-b border-neutral-200 px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <span aria-hidden className="w-9" />
-        <div className="flex flex-1 flex-col items-center">
+        <button
+          type="button"
+          onClick={openSheet}
+          aria-label="About Josefine"
+          className="flex flex-1 flex-col items-center"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/josefine-avatar.jpg"
@@ -510,19 +530,10 @@ export default function ChatClient() {
             )}
             {statusText}
           </div>
-        </div>
+        </button>
         <button
           aria-label="About Josefine"
-          onClick={() => {
-            setSheetOpen(true);
-            // is_anonymous can flip mid-session (claim confirmed in another
-            // tab) — refresh so the sheet never shows a stale "claim" row.
-            void getBrowserSupabase()
-              .auth.getUser()
-              .then(({ data }) =>
-                setAnonymous(data.user?.is_anonymous === true)
-              );
-          }}
+          onClick={openSheet}
           className="flex w-9 items-center justify-center p-1.5 text-[#0a84ff]"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
@@ -575,6 +586,11 @@ export default function ChatClient() {
           <MessageList
             messages={messages}
             pendingReadAt={pendingReadAt}
+            failedText={failedText}
+            onRetry={(t) => {
+              setFailedText(null);
+              void sendText(t, false); // bubble already on screen
+            }}
             onHerTap={tapHer}
           />
         )}
@@ -613,7 +629,7 @@ export default function ChatClient() {
                 void sendText(input.trim());
               }
             }}
-            placeholder="iMessage"
+            placeholder="message…"
             enterKeyHint="send"
             autoComplete="off"
             className="block w-full resize-none text-[16.5px] leading-snug outline-none placeholder:text-neutral-400"
@@ -691,19 +707,34 @@ const GAP_MS = 60 * 60_000; // timestamp separator after an hour of silence
 function MessageList({
   messages,
   pendingReadAt,
+  failedText,
+  onRetry,
   onHerTap,
 }: {
   messages: Bubble[];
   pendingReadAt: string | null;
+  failedText: string | null;
+  onRetry: (text: string) => void;
   /** Double-tap detector lives in the parent — this fires per tap on her bubbles. */
   onHerTap: (m: Bubble) => void;
 }) {
-  // iOS groups consecutive same-sender bubbles; tail goes on the last one.
+  // iOS groups consecutive same-sender bubbles — but a long silence or a day
+  // boundary always breaks the burst (new timestamp + new tail), even when
+  // the sender didn't change.
   const groups: { role: Bubble["role"]; items: Bubble[] }[] = [];
   for (const m of messages) {
     const last = groups[groups.length - 1];
-    if (last && last.role === m.role) last.items.push(m);
-    else groups.push({ role: m.role, items: [m] });
+    const prev = last?.items[last.items.length - 1];
+    const breaks =
+      !last ||
+      last.role !== m.role ||
+      gap(m, prev) > GAP_MS ||
+      (prev?.created_at != null &&
+        m.created_at != null &&
+        new Date(prev.created_at).toDateString() !==
+          new Date(m.created_at).toDateString());
+    if (breaks) groups.push({ role: m.role, items: [m] });
+    else last.items.push(m);
   }
 
   // Receipt state for the most recent user bubble: Read once her reply
@@ -718,9 +749,14 @@ function MessageList({
     <div className="flex flex-col">
       {groups.map((g, gi) => {
         const prev = groups[gi - 1];
+        const prevItem = prev?.items[prev.items.length - 1];
+        const dayChanged =
+          prevItem?.created_at != null &&
+          g.items[0].created_at != null &&
+          new Date(prevItem.created_at).toDateString() !==
+            new Date(g.items[0].created_at).toDateString();
         const showTime =
-          gi === 0 ||
-          gap(g.items[0], prev?.items[prev.items.length - 1]) > GAP_MS;
+          gi === 0 || gap(g.items[0], prevItem) > GAP_MS || dayChanged;
         const isLastUserGroup = gi === lastUserGroupIdx;
         return (
           <div key={gi}>
@@ -748,13 +784,22 @@ function MessageList({
                   </div>
                 );
               })}
-              {isLastUserGroup && (
-                <div className="mt-1 px-1 text-right text-[10px] text-neutral-400">
-                  {readAt ?? pendingReadAt
-                    ? `Read ${formatClock(readAt ?? pendingReadAt!)}`
-                    : "Delivered"}
-                </div>
-              )}
+              {isLastUserGroup &&
+                (failedText ? (
+                  <button
+                    type="button"
+                    onClick={() => onRetry(failedText)}
+                    className="mt-1 px-1 text-right text-[10px] font-medium text-[#ff3b30]"
+                  >
+                    Not Delivered — tap to retry
+                  </button>
+                ) : (
+                  <div className="mt-1 px-1 text-right text-[10px] text-neutral-400">
+                    {readAt ?? pendingReadAt
+                      ? `Read ${formatClock(readAt ?? pendingReadAt!)}`
+                      : "Delivered"}
+                  </div>
+                ))}
             </div>
           </div>
         );
