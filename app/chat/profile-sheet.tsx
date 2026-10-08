@@ -237,7 +237,7 @@ function SheetInner({
                 <span className="text-neutral-300">›</span>
               </button>
               <Link
-                href="/auth"
+                href="/auth?mode=login"
                 className="flex w-full items-center gap-3 rounded-b-xl bg-white px-4 py-3.5 text-left active:bg-neutral-100"
               >
                 <span className="flex h-7 w-7 items-center justify-center rounded-md bg-neutral-400 text-[13px] text-white">

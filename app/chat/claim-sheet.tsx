@@ -121,7 +121,7 @@ function Inner({
           <>
             <div className="mt-5 rounded-xl bg-white px-4 py-4 text-center text-[14px] text-neutral-600">
               that email already has an account.{" "}
-              <Link href="/auth" className="font-medium text-[#0a84ff]">
+              <Link href="/auth?mode=login" className="font-medium text-[#0a84ff]">
                 log in
               </Link>
             </div>
@@ -173,7 +173,7 @@ function Inner({
             </button>
             <p className="pt-1 text-center text-[12px] text-neutral-400">
               have an account?{" "}
-              <Link href="/auth" className="text-[#0a84ff]">
+              <Link href="/auth?mode=login" className="text-[#0a84ff]">
                 log in
               </Link>
             </p>

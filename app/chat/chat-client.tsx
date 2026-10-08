@@ -481,7 +481,7 @@ export default function ChatClient() {
           <div className="mx-auto mb-3 flex max-w-xs items-center gap-2 rounded-full bg-neutral-100 px-4 py-2 text-[12px] text-neutral-500">
             <span className="flex-1">
               welcome back — this is a fresh guest chat.{" "}
-              <a href="/auth" className="font-medium text-[#0a84ff]">
+              <a href="/auth?mode=login" className="font-medium text-[#0a84ff]">
                 log in
               </a>{" "}
               to get your thread back

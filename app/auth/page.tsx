@@ -42,7 +42,9 @@ function AuthInner() {
     "checking" | "none" | "anonymous" | "authed"
   >("checking");
   /** Anonymous user opted to log into an existing account anyway. */
-  const [guestLogin, setGuestLogin] = useState(false);
+  const [guestLogin, setGuestLogin] = useState(
+    () => params.get("mode") === "login" // deep link — open on the login form
+  );
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -107,6 +109,12 @@ function AuthInner() {
       setLoading(false);
       if (error) {
         setError(friendly(error.message));
+        // They typed existing creds into the claim form — that IS a login
+        // attempt; move them to the login form rather than dead-ending.
+        if (/already registered|already exists/i.test(error.message)) {
+          setGuestLogin(true);
+          setMode("login");
+        }
         return;
       }
       if (data.user?.is_anonymous) {
