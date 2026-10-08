@@ -6,26 +6,42 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const grotesk = Onest({ weight: ["400", "700"], subsets: ["latin"] });
 
-const COLLAGE_PHOTOS = [
-  "/collage/tile-01.jpg",
-  "/collage/tile-02.jpg",
-  "/collage/tile-03.jpg",
-  "/collage/tile-04.jpg",
-  "/collage/tile-05.jpg",
-  "/collage/tile-06.jpg",
-  "/collage/tile-07.jpg",
-];
+// 88 square + every-5th portrait tiles — regenerate via scripts/make-collage-tiles.py
+const SQ_COUNT = 88;
+const COLLAGE_SQUARE = Array.from(
+  { length: SQ_COUNT },
+  (_, i) => `/collage/tile-${String(i + 1).padStart(2, "0")}.jpg`
+);
+const COLLAGE_PORTRAIT = Array.from(
+  { length: Math.floor(SQ_COUNT / 5) },
+  (_, i) => `/collage/ptile-${String((i + 1) * 5).padStart(2, "0")}.jpg`
+);
 
-const SLOTS = 56;
-const TILTS = [-1.3, 1.1, -0.7, 1.5, -1.0, 0.8];
+const COLS = 5;
+// Per-column drift durations — different speeds = parallax depth.
+const DURS = [96, 136, 82, 118, 150];
 
-// Deterministic spread — a stride coprime-ish to the pool keeps neighbors
-// different without Math.random in render.
-function initialSlots(): string[] {
-  return Array.from(
-    { length: SLOTS },
-    (_, i) => COLLAGE_PHOTOS[(i * 3) % COLLAGE_PHOTOS.length]
-  );
+interface Tile {
+  src: string;
+  portrait: boolean;
+}
+
+/** Deterministic column slices — photo i goes to column i % COLS, a portrait
+ *  tile inserted every 5th slot for editorial rhythm. */
+function columnTiles(col: number): Tile[] {
+  const items: Tile[] = [];
+  let p = 0;
+  COLLAGE_SQUARE.forEach((src, i) => {
+    if (i % COLS !== col) return;
+    items.push({ src, portrait: false });
+    if (items.length % 5 === 0) {
+      items.push({
+        src: COLLAGE_PORTRAIT[p++ % COLLAGE_PORTRAIT.length],
+        portrait: true,
+      });
+    }
+  });
+  return items;
 }
 
 /** Stockholm clock — deterministic, no fetch. Her status is her clock. */
@@ -112,7 +128,9 @@ export default function AboutClient() {
   const [status, setStatus] = useState("");
   // Her real day — folded into the typewriter rotation when it lands.
   const [herDay, setHerDay] = useState<string | null>(null);
-  const [slots, setSlots] = useState<string[]>(initialSlots);
+  const [columns] = useState(() =>
+    Array.from({ length: COLS }, (_, c) => columnTiles(c))
+  );
 
   useEffect(() => {
     const tick = () => setStatus(herStatusLine(new Date()));
@@ -135,28 +153,6 @@ export default function AboutClient() {
       .catch(() => {});
   }, []);
 
-  // A tile quietly becomes another photo every few seconds — the wall is alive.
-  useEffect(() => {
-    if (COLLAGE_PHOTOS.length < 2) return;
-    const iv = setInterval(() => {
-      setSlots((prev) => {
-        const i = Math.floor(Math.random() * prev.length);
-        const next = [...prev];
-        const cur = next[i];
-        let cand =
-          COLLAGE_PHOTOS[Math.floor(Math.random() * COLLAGE_PHOTOS.length)];
-        if (cand === cur)
-          cand =
-            COLLAGE_PHOTOS[
-              (COLLAGE_PHOTOS.indexOf(cur) + 1) % COLLAGE_PHOTOS.length
-            ];
-        next[i] = cand;
-        return next;
-      });
-    }, 4800);
-    return () => clearInterval(iv);
-  }, []);
-
   const lines = useMemo(
     () =>
       [
@@ -171,21 +167,30 @@ export default function AboutClient() {
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-[#171324] text-white">
-      {/* her life — a contact sheet under everything */}
-      <div className="collage-wrap" aria-hidden>
-        <div className="collage-grid">
-          {slots.map((src, i) => (
+      {/* her camera roll — a contact sheet that never stops living */}
+      <div className="collage-wall" aria-hidden>
+        {columns.map((tiles, c) => (
+          <div key={c} className={`collage-col${c % 2 ? " down" : ""}`}>
             <div
-              key={i}
-              className="collage-cell"
-              style={{ transform: `rotate(${TILTS[i % TILTS.length]}deg)` }}
+              className="collage-track"
+              style={{ animationDuration: `${DURS[c % DURS.length]}s` }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img key={src} src={src} alt="" className="collage-img" />
+              {[...tiles, ...tiles].map((t, i) => (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  key={i}
+                  src={t.src}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className={`collage-tile${t.portrait ? " pt" : ""}`}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
+      <div className="collage-grade" aria-hidden />
       <div className="collage-scrim" aria-hidden />
       <div className="dusk-grain" aria-hidden />
 

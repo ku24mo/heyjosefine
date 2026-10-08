@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# about-page photo sources (raw, too large to ship)
+public/collage-src/

@@ -179,41 +179,65 @@ body {
   animation: sheet-backdrop 0.2s ease-out;
 }
 
-/* ── /about — the life collage ──────────────────────────────────────────── */
+/* ── /about — the life wall: drifting contact-sheet columns ─────────────── */
 
-/* Oversized by 6% so rotated tiles never expose the page edge. */
-.collage-wrap {
+/* Oversized so drifting columns never expose the page edge. */
+.collage-wall {
   position: absolute;
-  inset: -6%;
+  inset: -2%;
+  display: flex;
+  gap: 2px;
   overflow: hidden;
 }
-.collage-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  height: 100%;
-  align-content: start;
+.collage-col {
+  flex: 1;
+  min-width: 0;
 }
-@media (min-width: 640px) {
-  .collage-grid { grid-template-columns: repeat(7, 1fr); }
+@media (max-width: 639px) {
+  /* 3 columns on phones — density over breadth. */
+  .collage-col:nth-child(n + 4) { display: none; }
 }
-.collage-cell {
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
-  border-radius: 10px;
+/* Track holds the sequence twice; -50% loops it seamlessly. */
+.collage-track {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: collage-drift 100s linear infinite;
+  will-change: transform;
 }
-.collage-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+@keyframes collage-drift {
+  to { transform: translateY(-50%); }
+}
+/* Alternate columns drift down — a calm cross-current instead of a conveyor. */
+.collage-col.down .collage-track {
+  animation-direction: reverse;
+}
+.collage-tile {
   display: block;
+  width: 100%;
+  flex: none;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  /* One shoot, not 88 strangers — gentle unifying grade. */
+  filter: saturate(0.85) contrast(1.02);
 }
-/* Tile swap: the new img remounts and fades in over the old cell. */
-@keyframes collage-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.collage-tile.pt { aspect-ratio: 3 / 4; }
+@media (prefers-reduced-motion: reduce) {
+  .collage-track { animation: none; }
 }
-.collage-img { animation: collage-in 0.9s ease both; }
+
+/* Warm-violet veil over the wall — cohesion + legibility base. */
+.collage-grade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    160deg,
+    rgba(150, 90, 110, 0.1),
+    rgba(50, 40, 100, 0.16)
+  );
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
 
 /* Legibility veil — heavier top-left where the wordmark lives. */
 .collage-scrim {
