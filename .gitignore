@@ -42,3 +42,7 @@ next-env.d.ts
 
 # about-page photo sources (raw, too large to ship)
 public/collage-src/
+
+# media library sources — imported into Supabase storage, not git
+/media-library/
+/photos/
