@@ -64,7 +64,7 @@ export const CONFIG = {
   usage: {
     guestTotalLimit: 30, // anonymous lifetime msgs → claim wall
     guestCreationsPerDay: 5, // per-IP anon sign-up cap
-    freeDailyLimit: 40, // claimed: user messages per day
+    freeDailyLimit: 20, // claimed: user messages per day — brushes create upgrade moments
     freeTotalLimit: 150, // claimed lifetime cap → paywall
     burstPerMinute: 10, // rapid-fire cap — protects LLM spend, not the user
   },

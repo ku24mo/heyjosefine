@@ -69,6 +69,10 @@ function SheetInner({
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
   const [pwSent, setPwSent] = useState(false);
+  const [usage, setUsage] = useState<{
+    usedToday: number;
+    dailyLimit: number;
+  } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -87,7 +91,14 @@ function SheetInner({
         }
       }
       setPendingEmail(pending);
+      // Daily meter — claimed free accounts only. Guests don't get a gauge
+      // (the claim wall is the reveal) and unlimited is unmetered.
+      if (data.user && !data.user.is_anonymous && plan === "free") {
+        const res = await fetch("/api/usage").catch(() => null);
+        if (res?.ok) setUsage(await res.json());
+      }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function resendClaim() {
@@ -287,6 +298,24 @@ function SheetInner({
                   </span>
                 </span>
               </div>
+              {plan === "free" && usage && (
+                <div className="bg-white px-4 py-3">
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-neutral-500">messages today</span>
+                    <span className="text-neutral-400">
+                      {usage.usedToday} / {usage.dailyLimit}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1 rounded-full bg-neutral-100">
+                    <div
+                      className="h-1 rounded-full bg-[#0a84ff]"
+                      style={{
+                        width: `${Math.min(100, (usage.usedToday / usage.dailyLimit) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
               {plan === "unlimited" ? (
                 <button
                   onClick={async () => {

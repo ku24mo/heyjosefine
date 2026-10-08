@@ -64,6 +64,7 @@ export default function ChatClient() {
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [paywall, setPaywall] = useState(false);
+  const [paywallReason, setPaywallReason] = useState<"daily" | "total">("total");
   const [loading, setLoading] = useState(true);
   /** Her most recent message's timestamp — drives "last seen"/online. */
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
@@ -399,6 +400,10 @@ export default function ChatClient() {
         return;
       }
       if (res.status === 402) {
+        const d = await res.json().catch(() => ({}));
+        // Daily cap resets tomorrow; the lifetime cap doesn't — the copy
+        // has to say which wall this is.
+        setPaywallReason(d?.usage?.reason === "daily" ? "daily" : "total");
         setPaywall(true);
         return;
       }
@@ -600,8 +605,17 @@ export default function ChatClient() {
             href="/paywall"
             className="mx-auto my-4 block max-w-xs rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-center text-sm text-neutral-600"
           >
-            that&rsquo;s all the free messages —{" "}
-            <span className="font-medium text-[#0a84ff]">go unlimited</span>
+            {paywallReason === "daily" ? (
+              <>
+                that&rsquo;s today&rsquo;s free messages — back tomorrow, or{" "}
+                <span className="font-medium text-[#0a84ff]">go unlimited</span>
+              </>
+            ) : (
+              <>
+                that&rsquo;s all the free messages —{" "}
+                <span className="font-medium text-[#0a84ff]">go unlimited</span>
+              </>
+            )}
           </a>
         )}
         <div ref={bottomRef} />
