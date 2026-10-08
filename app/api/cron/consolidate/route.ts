@@ -39,9 +39,11 @@ interface MemoryLite {
 }
 
 export async function GET(request: Request) {
-  if (
-    request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  const cronSecret = process.env.CRON_SECRET;
+  // Unset secret must fail closed — `Bearer undefined` would otherwise pass.
+  if (!cronSecret)
+    return NextResponse.json({ error: "not configured" }, { status: 503 });
+  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

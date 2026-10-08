@@ -4,6 +4,7 @@ import {
   getOrCreateConversation,
   getRecentMessages,
 } from "@/lib/db/queries";
+import { mediaPathFromUrl, signMediaPath } from "@/lib/media/pick";
 import { currentPresence } from "@/lib/persona/presence";
 import { stageForFamiliarity } from "@/lib/persona/profile";
 import { getOrCreateState } from "@/lib/state/conversation";
@@ -48,14 +49,26 @@ export async function GET() {
     // Server-side claim flag — survives cross-device confirms; the client
     // fires /api/auth/claimed once when it sees this on a real session.
     claimPending: profile.data?.claim_pending === true,
-    messages: messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      created_at: m.created_at,
-      tapback: m.meta?.tapback ?? null,
-      user_tapback: m.meta?.user_tapback ?? null,
-      media: m.meta?.media ?? null,
-    })),
+    messages: await Promise.all(
+      messages.map(async (m) => {
+        // Bucket is private — stored URLs expire. Re-sign from the stored path
+        // (new rows) or the path parsed out of a legacy public URL.
+        let media = m.meta?.media ?? null;
+        if (media) {
+          const path = media.path ?? mediaPathFromUrl(media.url);
+          const fresh = path ? await signMediaPath(path) : null;
+          media = fresh ? { ...media, url: fresh } : null;
+        }
+        return {
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+          tapback: m.meta?.tapback ?? null,
+          user_tapback: m.meta?.user_tapback ?? null,
+          media,
+        };
+      })
+    ),
   });
 }

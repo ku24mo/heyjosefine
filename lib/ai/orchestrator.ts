@@ -357,6 +357,7 @@ export async function orchestrate(opts: {
         meta: {
           media: {
             url: picked.url,
+            path: picked.asset.storage_path,
             subject: picked.asset.subject,
             scene: out.media.scene,
           },

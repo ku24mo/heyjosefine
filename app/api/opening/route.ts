@@ -78,6 +78,7 @@ export async function GET(request: Request) {
         meta: {
           media: {
             url: opening.media.url,
+            path: opening.media.asset.storage_path,
             subject: opening.media.asset.subject,
           },
         },

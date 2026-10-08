@@ -23,8 +23,9 @@ export interface MessageMeta {
   user_tapback?: string;
   /** In-conversation double-text she sent after he went quiet */
   nudge?: boolean;
-  /** A photo she sent — resolved CDN url + what it depicts. */
-  media?: { url: string; subject: string; scene?: string | null };
+  /** A photo she sent — signed url (expires ~1h) + what it depicts. `path`
+   *  is the stable storage key; history reads re-sign it. */
+  media?: { url: string; subject: string; scene?: string | null; path?: string };
 }
 
 export type MemoryCategory =

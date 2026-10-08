@@ -5,9 +5,10 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const next = url.searchParams.get("next");
-  // Internal paths only — never an open redirect.
-  const target =
-    next?.startsWith("/") && !next.startsWith("//") ? next : "/";
+  // Internal paths only — never an open redirect. First char after "/" must
+  // be a letter: rejects "//host" and "/\host" (backslash parses as a
+  // separator in WHATWG URLs).
+  const target = next && /^\/[a-zA-Z]/.test(next) ? next : "/";
 
   if (code) {
     const supabase = await createServerSupabase();

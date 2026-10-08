@@ -27,10 +27,13 @@ export async function POST(request: Request) {
   const { data: existing } = await supabase.auth.getUser();
   if (existing.user) return NextResponse.json({ ok: true });
 
-  // Best-effort client IP for the rate gate.
+  // Best-effort client IP for the rate gate. x-real-ip is edge-set on Vercel
+  // and can't be forged; the FIRST x-forwarded-for entry is client-supplied —
+  // trusting it would let a script mint unlimited guests with fake headers.
+  const fwd = request.headers.get("x-forwarded-for")?.split(",");
   const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     request.headers.get("x-real-ip") ??
+    fwd?.[fwd.length - 1]?.trim() ??
     null;
 
   if (ip) {

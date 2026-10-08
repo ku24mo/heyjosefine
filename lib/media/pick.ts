@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CONFIG } from "@/lib/config";
+import { createServiceSupabase } from "@/lib/supabase/server";
 
 /**
  * Media send resolution — the model PROPOSES ({subject, scene} intent),
@@ -27,12 +28,26 @@ export interface MediaIntent {
 
 export interface PickedMedia {
   asset: MediaAsset;
+  /** Fresh signed URL — expires in ~1h; re-sign on history reads. */
   url: string;
 }
 
-export function mediaUrl(supabase: SupabaseClient, storagePath: string): string {
-  return supabase.storage.from(MEDIA_BUCKET).getPublicUrl(storagePath).data
-    .publicUrl;
+/**
+ * Sign a library asset for delivery — service role only. The bucket is
+ * private (0016): public URLs and self-minted signed URLs both 403, so a
+ * dumped storage_path is worthless without the app signing it.
+ */
+export async function signMediaPath(storagePath: string): Promise<string | null> {
+  const { data } = await createServiceSupabase()
+    .storage.from(MEDIA_BUCKET)
+    .createSignedUrl(storagePath, 3600);
+  return data?.signedUrl ?? null;
+}
+
+/** Extract the storage path from a legacy public or signed URL (pre-0016 rows). */
+export function mediaPathFromUrl(url: string): string | null {
+  const m = url.match(/\/josefine-media\/([^?]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
 }
 
 /** Pure chooser — the testable core. Assumes assets already pass
@@ -122,8 +137,11 @@ export async function pickMedia(
     return null;
 
   // ── eligibility: timeline + intimacy tier + never-sent ──
+  // media_assets is service-read (0016): a session sees only assets it was
+  // already sent — the candidate pool must be read with the service client.
   const sentIds = new Set(rows.map((r) => r.asset_id as string));
-  const { data: assets } = await supabase
+  const service = createServiceSupabase();
+  const { data: assets } = await service
     .from("media_assets")
     .select("id, subject, tags, intimacy_tier, unlock_day, storage_path")
     .eq("enabled", true)
@@ -140,7 +158,9 @@ export async function pickMedia(
     preferSubjects: opts.preferSubjects,
   });
   if (!asset) return null;
-  return { asset, url: mediaUrl(supabase, asset.storage_path) };
+  const url = await signMediaPath(asset.storage_path);
+  if (!url) return null;
+  return { asset, url };
 }
 
 /** Write the ledger row once the media message exists. Fail-soft: a
