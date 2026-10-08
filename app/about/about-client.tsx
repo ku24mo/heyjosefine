@@ -192,17 +192,19 @@ export default function AboutClient() {
       </div>
       <div className="collage-grade" aria-hidden />
       <div className="collage-scrim" aria-hidden />
+      <div className="collage-plate" aria-hidden />
+      <div className="collage-band" aria-hidden />
       <div className="dusk-grain" aria-hidden />
 
       {/* left stack — wordmark, then her typing */}
       <main className="relative z-10 flex min-h-dvh flex-col justify-center px-[7vw] pb-28">
         <h1
-          className={`${grotesk.className} dusk-fade text-[24vw] font-bold leading-[0.95] tracking-tight text-white/90 sm:text-[10rem]`}
+          className={`${grotesk.className} dusk-fade text-[24vw] font-bold leading-[0.95] tracking-tight text-white/95 sm:text-[10rem] [text-shadow:0_2px_30px_rgba(0,0,0,0.45)]`}
         >
           josefine
         </h1>
         <p
-          className={`${grotesk.className} dusk-fade-slow mt-6 h-5 text-[13px] text-white/75 sm:text-sm`}
+          className={`${grotesk.className} dusk-fade-slow mt-6 h-5 text-sm font-medium text-white/90 sm:text-base [text-shadow:0_1px_14px_rgba(0,0,0,0.55)]`}
         >
           {typed}
           <span className="tw-caret" aria-hidden>
@@ -217,21 +219,21 @@ export default function AboutClient() {
         </Link>
       </main>
 
-      <footer className="absolute bottom-6 left-0 right-0 z-10 flex items-center justify-center gap-3 text-[11px] text-white/40">
+      <footer className="absolute bottom-6 left-0 right-0 z-10 flex items-center justify-center gap-3 text-[11px] text-white/70 [text-shadow:0_1px_10px_rgba(0,0,0,0.6)]">
         <span>an ai companion</span>
         <span aria-hidden>·</span>
         <a
           href="https://www.instagram.com/fine__josie/"
           target="_blank"
           rel="noreferrer"
-          className="hover:text-white/70"
+          className="hover:text-white"
         >
           instagram
         </a>
         <span aria-hidden>·</span>
-        <Link href="/privacy" className="hover:text-white/70">privacy</Link>
+        <Link href="/privacy" className="hover:text-white">privacy</Link>
         <span aria-hidden>·</span>
-        <Link href="/terms" className="hover:text-white/70">terms</Link>
+        <Link href="/terms" className="hover:text-white">terms</Link>
       </footer>
     </div>
   );

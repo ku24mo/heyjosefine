@@ -252,6 +252,31 @@ body {
   pointer-events: none;
 }
 
+/* Text plate — a shadowed zone behind the left stack so type floats over
+   the wall instead of fighting it. */
+.collage-plate {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(13, 10, 20, 0.85) 0%,
+    rgba(13, 10, 20, 0.55) 38%,
+    transparent 62%
+  );
+  pointer-events: none;
+}
+/* Bottom runway — footer whispers and the CTA get a dark band to sit on. */
+.collage-band {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(13, 10, 20, 0.78) 0%,
+    transparent 26%
+  );
+  pointer-events: none;
+}
+
 /* Typewriter caret — hard blink, like the terminal. */
 @keyframes tw-blink {
   50% { opacity: 0; }
