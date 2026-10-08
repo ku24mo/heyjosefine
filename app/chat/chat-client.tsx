@@ -36,8 +36,8 @@ const maxIso = (a: string | null, b: string | null) =>
   !a ? b : !b ? a : a > b ? a : b;
 
 /** Photo bubble — missing storage objects degrade to a quiet placeholder.
- *  Not an anchor: the tap handler on the bubble decides — single tap opens
- *  it, double-tap ❤️s it instead (iOS behavior). */
+ *  Inert tile: no zoom, no open, no long-press save sheet; double-tap ❤️
+ *  is handled by the bubble's tap handler. */
 function MediaBubble({ media }: { media: BubbleMedia }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
@@ -53,8 +53,10 @@ function MediaBubble({ media }: { media: BubbleMedia }) {
       src={media.url}
       alt={media.subject}
       loading="lazy"
+      draggable={false}
+      onContextMenu={(e) => e.preventDefault()}
       onError={() => setFailed(true)}
-      className="block h-auto w-[220px] max-w-full cursor-pointer rounded-[14px]"
+      className="block h-auto w-[220px] max-w-full select-none rounded-[14px] [-webkit-touch-callout:none]"
     />
   );
 }
@@ -98,7 +100,7 @@ export default function ChatClient() {
   /** Boot-time session identity — the auth listener resyncs on swaps. */
   const bootUserRef = useRef<{ id: string; anon: boolean } | null>(null);
   /** Single-tap on a photo opens it after a grace window a double-tap can cancel. */
-  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   const scrollToBottom = useCallback((instant = false) => {
     const go = () =>
@@ -456,29 +458,17 @@ export default function ChatClient() {
     }
   }, []);
 
-  /** Taps on her bubbles: double-tap toggles ❤️; on photos a single tap opens
-   *  the image after a short grace window the second tap cancels. */
+  /** Taps on her bubbles: double-tap toggles ❤️. Photos are inert tiles —
+   *  no zoom, no open; keeping them in-thread is the product's feel. */
   const tapHer = useCallback(
     (m: Bubble) => {
       const t = Date.now();
       if (lastTapRef.current?.id === m.id && t - lastTapRef.current.t < 350) {
         lastTapRef.current = null;
-        if (openTimerRef.current) {
-          clearTimeout(openTimerRef.current);
-          openTimerRef.current = null;
-        }
         void reactTo(m);
         return;
       }
       lastTapRef.current = { id: m.id, t };
-      if (m.media?.url) {
-        if (openTimerRef.current) clearTimeout(openTimerRef.current);
-        const url = m.media.url;
-        openTimerRef.current = setTimeout(() => {
-          window.open(url, "_blank", "noreferrer");
-          openTimerRef.current = null;
-        }, 350);
-      }
     },
     [reactTo]
   );

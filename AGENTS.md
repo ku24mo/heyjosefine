@@ -25,3 +25,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - One active conversation per user: `conversations.is_active` + partial unique index (migration `0007`); `/api/reset` retires the old thread.
 - No pg pooler needed — supabase-js speaks HTTPS/PostgREST; Supabase pools server-side.
 - Load test: `npm run loadtest -- --users N --msgs M [--mock]` — creates throwaway auth users, exercises the real turn lock + orchestrator, reports p50/p95 and invariant checks.
+- Chat photos: add files as `media-library/<subject>/d<unlock-day>-<tags>.jpg` (see `scripts/media-import.ts` header for tiers/`comfort` tag), optionally `sips -Z 1024` them, then `npx tsx scripts/media-import.ts ./media-library` — idempotent, skips already-imported paths. Photos render as inert tiles — no zoom/open/save by design.
