@@ -2,7 +2,7 @@
 
 import { Onest } from "next/font/google";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const grotesk = Onest({ weight: ["400", "700"], subsets: ["latin"] });
 
@@ -83,6 +83,36 @@ function inAppBrowser(ua: string): boolean {
   return /instagram|tiktok|musical_ly|fbav|facebook/i.test(ua);
 }
 
+/** Type once, then stay — entry effect for the status lines. Types when the
+ *  value first becomes non-empty; later updates swap in instantly (the
+ *  minute-tick shouldn't re-type every time). */
+function useTypeOnce(text: string): { shown: string; done: boolean } {
+  const [shown, setShown] = useState("");
+  const [done, setDone] = useState(false);
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (!text) return;
+    if (doneRef.current) {
+      setShown(text);
+      return;
+    }
+    let i = 0;
+    const iv = window.setInterval(() => {
+      i++;
+      setShown(text.slice(0, i));
+      if (i >= text.length) {
+        doneRef.current = true;
+        setDone(true);
+        window.clearInterval(iv);
+      }
+    }, 28);
+    return () => window.clearInterval(iv);
+  }, [text]);
+
+  return { shown, done };
+}
+
 export default function LinksClient() {
   const router = useRouter();
   const [columns] = useState(() =>
@@ -92,6 +122,8 @@ export default function LinksClient() {
   const [herDay, setHerDay] = useState<string | null>(null);
   const [escapeSheet, setEscapeSheet] = useState(false);
   const [copied, setCopied] = useState(false);
+  const statusTyped = useTypeOnce(status);
+  const herDayTyped = useTypeOnce(herDay ?? "");
 
   useEffect(() => {
     const tick = () => setStatus(herStatusLine(new Date()));
@@ -144,7 +176,7 @@ export default function LinksClient() {
       className={`${grotesk.className} relative min-h-dvh overflow-hidden bg-[#171324] text-white`}
     >
       {/* the wall — her camera roll drifting behind the links */}
-      <div className="collage-wall dusk-fade-slow" aria-hidden>
+      <div className="collage-wall links-wall dusk-fade-slow" aria-hidden>
         {columns.map((fragments, c) => (
           <div key={c} className={`collage-col${c % 2 ? " down" : ""}`}>
             <div
@@ -182,14 +214,18 @@ export default function LinksClient() {
         <h1 className="dusk-fade text-[20vw] font-bold leading-none tracking-tight text-white/95 sm:text-[7.5rem] [text-shadow:0_2px_30px_rgba(0,0,0,0.45)]">
           josefine
         </h1>
-        <p className="dusk-fade-slow mt-4 text-[13px] text-white/70 [text-shadow:0_1px_14px_rgba(0,0,0,0.55)]">
-          {status}
+        <p className="dusk-fade-slow mt-4 h-[18px] text-[13px] text-white/70 [text-shadow:0_1px_14px_rgba(0,0,0,0.55)]">
+          {statusTyped.shown}
+          {!statusTyped.done && statusTyped.shown && (
+            <span className="tw-caret" aria-hidden>|</span>
+          )}
         </p>
-        {herDay && (
-          <p className="dusk-fade-slow mt-1 text-[13px] text-white/50 [text-shadow:0_1px_14px_rgba(0,0,0,0.55)]">
-            {herDay}
-          </p>
-        )}
+        <p className="dusk-fade-slow mt-1 h-[18px] text-[13px] text-white/50 [text-shadow:0_1px_14px_rgba(0,0,0,0.55)]">
+          {herDayTyped.shown}
+          {!herDayTyped.done && herDayTyped.shown && (
+            <span className="tw-caret" aria-hidden>|</span>
+          )}
+        </p>
 
         {/* socials — the middle row, above the door */}
         <div className="dusk-fade-slow mt-9 flex items-center gap-6">
