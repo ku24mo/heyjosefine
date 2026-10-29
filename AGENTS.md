@@ -1,6 +1,6 @@
 <!-- BEGIN:nextjs-agent-rules -->
 
-# This is NOT the Next.js you know
+## This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
@@ -26,3 +26,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - No pg pooler needed — supabase-js speaks HTTPS/PostgREST; Supabase pools server-side.
 - Load test: `npm run loadtest -- --users N --msgs M [--mock]` — creates throwaway auth users, exercises the real turn lock + orchestrator, reports p50/p95 and invariant checks.
 - Chat photos: add files as `media-library/<subject>/d<unlock-day>-<tags>.jpg` (see `scripts/media-import.ts` header for tiers/`comfort` tag), optionally `sips -Z 1024` them, then `npx tsx scripts/media-import.ts ./media-library` — idempotent, skips already-imported paths. Photos render as inert tiles — no zoom/open/save by design.
+- Link hub: `/` rewrites to `/links` for Instagram/TikTok in-app browser UAs (`lib/supabase/proxy.ts`); everyone else still lands in chat. Telegram row is a "soon" stub in `app/links/links-client.tsx` — swap in the t.me URL when the channel exists.
+- Photo store: bundles are code-defined in `lib/store/bundles.ts`; files go to the private `josefine-store` bucket under `<bundle_id>/` (migration `0017` + `purchases` table). Stripe one-time checkout → `mode:"payment"` → success page verifies the session and signs 1h URLs on each visit. Preview thumbs are public files in `public/store/` or `public/`.

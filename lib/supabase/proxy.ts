@@ -8,14 +8,26 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  let response = NextResponse.next({ request });
+  // Bio-link taps land on the link hub instead of straight into chat.
+  // In-app browsers announce themselves in the UA — everyone else typing
+  // the URL directly still gets the product.
+  const ua = (request.headers.get("user-agent") ?? "").toLowerCase();
+  const fromSocial =
+    ua.includes("instagram") || ua.includes("tiktok") || ua.includes("musical_ly");
+  const path = request.nextUrl.pathname;
+  // Cookie refresh rebuilds the response — keep the rewrite in one place.
+  const makeResponse = () =>
+    path === "/" && fromSocial
+      ? NextResponse.rewrite(new URL("/links", request.url))
+      : NextResponse.next({ request });
+  let response = makeResponse();
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (toSet) => {
         toSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = makeResponse();
         toSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options)
         );
@@ -26,8 +38,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const path = request.nextUrl.pathname;
 
   // Anonymous-first: guests ARE authenticated users — they belong in chat,
   // never bounced to /auth. Only a *claimed* session shouldn't see the login

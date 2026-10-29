@@ -29,6 +29,23 @@ export async function POST(request: Request) {
 
   if (event.type === "checkout.session.completed") {
     const s = event.data.object as Stripe.Checkout.Session;
+
+    // Store purchase — one-time payment for a photo bundle. The success
+    // page re-verifies the session live; this row is the durable record
+    // (order history, future re-access, support lookups).
+    if (s.mode === "payment" && s.metadata?.bundle_id) {
+      await supabase.from("purchases").upsert(
+        {
+          stripe_session_id: s.id,
+          bundle_id: s.metadata.bundle_id,
+          email: s.customer_details?.email ?? null,
+          amount_total: s.amount_total ?? null,
+          currency: s.currency ?? null,
+        },
+        { onConflict: "stripe_session_id" }
+      );
+    }
+
     const userId = s.client_reference_id ?? s.metadata?.user_id;
     if (userId && s.customer) {
       await supabase
