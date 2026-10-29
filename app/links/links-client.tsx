@@ -1,8 +1,8 @@
 "use client";
 
 import { Onest } from "next/font/google";
-import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const grotesk = Onest({ weight: ["400", "700"], subsets: ["latin"] });
 
@@ -21,6 +21,28 @@ function columnTiles(col: number): string[] {
     if (i % COLS === col) items.push(`/links-wall/wall-${(i % WALL_PHOTOS) + 1}.jpg`);
   }
   return items;
+}
+
+/** Stockholm clock — her status is her clock. Same logic as /about. */
+function herStatusLine(now: Date): string {
+  const time = new Intl.DateTimeFormat("en-GB", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Europe/Stockholm",
+  }).format(now);
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: "Europe/Stockholm",
+    }).format(now)
+  );
+
+  if (hour >= 1 && hour < 7) return `asleep — it's ${time} in stockholm`;
+  if (hour >= 7 && hour < 9) return `waking up — ${time} in stockholm`;
+  if (hour >= 9 && hour < 17) return `she's around — ${time} in stockholm`;
+  if (hour >= 17 && hour < 22) return `evening for her — ${time} in stockholm`;
+  return `probably still awake — ${time} in stockholm`;
 }
 
 function InstagramIcon() {
@@ -56,10 +78,66 @@ const SOCIALS = [
   { label: "x", href: "https://x.com/sage__josefine", Icon: XIcon, color: "#FFFFFF" },
 ];
 
+/** In-app webview (IG/TikTok/FB) — sessions die here, we push people out. */
+function inAppBrowser(ua: string): boolean {
+  return /instagram|tiktok|musical_ly|fbav|facebook/i.test(ua);
+}
+
 export default function LinksClient() {
+  const router = useRouter();
   const [columns] = useState(() =>
     Array.from({ length: COLS }, (_, c) => columnTiles(c))
   );
+  const [status, setStatus] = useState("");
+  const [herDay, setHerDay] = useState<string | null>(null);
+  const [escapeSheet, setEscapeSheet] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const tick = () => setStatus(herStatusLine(new Date()));
+    tick();
+    const iv = setInterval(tick, 60_000);
+    return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/her-day")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const line = d?.now?.label
+          ? `right now: ${d.now.label}`
+          : d?.headline
+            ? `today: ${d.headline}`
+            : null;
+        if (line) setHerDay(line.toLowerCase());
+      })
+      .catch(() => {});
+  }, []);
+
+  function textMe() {
+    const ua = navigator.userAgent;
+    if (!inAppBrowser(ua)) {
+      router.push("/");
+      return;
+    }
+    if (/android/i.test(ua)) {
+      // intent:// hands the URL to a real browser on Android.
+      window.location.href = `intent://${window.location.host}#Intent;scheme=https;end`;
+      return;
+    }
+    // iOS gives no escape hatch — guide them out instead.
+    setEscapeSheet(true);
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.origin);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <div
@@ -104,9 +182,17 @@ export default function LinksClient() {
         <h1 className="dusk-fade text-[20vw] font-bold leading-none tracking-tight text-white/95 sm:text-[7.5rem] [text-shadow:0_2px_30px_rgba(0,0,0,0.45)]">
           josefine
         </h1>
+        <p className="dusk-fade-slow mt-4 text-[13px] text-white/70 [text-shadow:0_1px_14px_rgba(0,0,0,0.55)]">
+          {status}
+        </p>
+        {herDay && (
+          <p className="dusk-fade-slow mt-1 text-[13px] text-white/50 [text-shadow:0_1px_14px_rgba(0,0,0,0.55)]">
+            {herDay}
+          </p>
+        )}
 
-        {/* socials — the middle row, above the doors */}
-        <div className="dusk-fade-slow mt-10 flex items-center gap-6">
+        {/* socials — the middle row, above the door */}
+        <div className="dusk-fade-slow mt-9 flex items-center gap-6">
           {SOCIALS.map(({ label, href, Icon, color }) => (
             <a
               key={label}
@@ -123,20 +209,44 @@ export default function LinksClient() {
         </div>
 
         <div className="dusk-fade-slower mt-7 flex w-full flex-col gap-3">
-          <Link
-            href="/store"
+          <button
+            type="button"
+            onClick={textMe}
             className="w-full rounded-[18px] bg-white/95 px-8 py-4 text-[15px] font-semibold tracking-wide text-[#171324] shadow-[0_8px_35px_rgba(255,255,255,0.22)] backdrop-blur-sm transition-colors hover:bg-white"
           >
-            exclusive photos →
-          </Link>
-          <Link
-            href="/"
-            className="w-full rounded-[18px] border border-white/35 bg-white/[0.16] px-8 py-4 text-[15px] tracking-wide text-white backdrop-blur-sm transition-colors hover:bg-white/25"
-          >
             text me →
-          </Link>
+          </button>
         </div>
       </main>
+
+      {/* iOS webview escape sheet — no programmatic way out, so we guide */}
+      {escapeSheet && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <button
+            aria-label="close"
+            onClick={() => setEscapeSheet(false)}
+            className="sheet-backdrop absolute inset-0 bg-black/60"
+          />
+          <div className="sheet-up relative mb-0 w-full max-w-md rounded-t-3xl bg-[#1f1a2e] px-6 pb-10 pt-6 text-center shadow-2xl">
+            <div className="mx-auto h-1 w-10 rounded-full bg-white/20" />
+            <p className="mt-5 text-[17px] font-semibold">open me in safari 🌐</p>
+            <p className="mt-2 text-[13px] leading-snug text-white/60">
+              instagram&rsquo;s browser forgets people — in safari
+              she&rsquo;ll actually remember you next time.
+            </p>
+            <button
+              type="button"
+              onClick={copyLink}
+              className="mt-5 w-full rounded-full bg-white/95 py-3 text-[14px] font-semibold text-[#171324] transition-colors hover:bg-white"
+            >
+              {copied ? "copied ✓" : "copy link"}
+            </button>
+            <p className="mt-3 text-[12px] text-white/45">
+              or tap ⋯ at the bottom → open in browser
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

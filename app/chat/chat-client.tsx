@@ -497,7 +497,7 @@ export default function ChatClient() {
     ? "online"
     : lastSeenAt
       ? `last seen ${lastSeenLabel(lastSeenAt, now)}`
-      : "AI companion";
+      : "";
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-white text-black">
