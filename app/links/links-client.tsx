@@ -65,8 +65,8 @@ export default function LinksClient() {
     <div
       className={`${grotesk.className} relative min-h-dvh overflow-hidden bg-[#171324] text-white`}
     >
-      {/* the wall — her texts drifting, not her photos */}
-      <div className="collage-wall" aria-hidden>
+      {/* the wall — her camera roll drifting behind the links */}
+      <div className="collage-wall dusk-fade-slow" aria-hidden>
         {columns.map((fragments, c) => (
           <div key={c} className={`collage-col${c % 2 ? " down" : ""}`}>
             <div
@@ -82,7 +82,10 @@ export default function LinksClient() {
                   key={i}
                   src={src}
                   alt=""
-                  loading="lazy"
+                  // Phones only see columns 0–2 — eager there, lazy on the
+                  // desktop-only columns so mobile doesn't fetch hidden tracks.
+                  loading={c < 3 ? "eager" : "lazy"}
+                  fetchPriority="low"
                   decoding="async"
                   className="mb-2 block w-full rounded-[14px] object-cover opacity-90 saturate-[0.85]"
                 />
