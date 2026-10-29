@@ -163,13 +163,20 @@ export async function GET(request: Request) {
   // only thing that ever identified them anyway.
   let guestsDeleted = 0;
   const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const { data: authPage } = await supabase.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  });
-  const staleGuests = (authPage?.users ?? []).filter(
-    (u) => u.is_anonymous && u.created_at < cutoff
-  );
+  // Page through ALL auth users — a single 1000-row page never reaches the
+  // back of the list once the account count outgrows it.
+  const staleGuests: { id: string }[] = [];
+  for (let page = 1; ; page++) {
+    const { data: authPage } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    });
+    const users = authPage?.users ?? [];
+    for (const u of users) {
+      if (u.is_anonymous && u.created_at < cutoff) staleGuests.push({ id: u.id });
+    }
+    if (users.length < 1000) break;
+  }
   for (const u of staleGuests) {
     const { data: st } = await supabase
       .from("conversation_state")
