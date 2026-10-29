@@ -228,7 +228,7 @@ export default function LinksClient() {
         </p>
 
         {/* socials — the middle row, above the door */}
-        <div className="dusk-fade-slow mt-9 flex items-center gap-6">
+        <div className="dusk-fade-slow mt-16 flex items-center gap-6">
           {SOCIALS.map(({ label, href, Icon, color }) => (
             <a
               key={label}
