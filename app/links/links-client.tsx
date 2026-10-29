@@ -87,7 +87,7 @@ export default function LinksClient() {
                   loading={c < 3 ? "eager" : "lazy"}
                   fetchPriority="low"
                   decoding="async"
-                  className="mb-2 block w-full rounded-[14px] object-cover opacity-90 saturate-[0.85]"
+                  className="mb-2 block aspect-[3/4] w-full rounded-[14px] object-cover opacity-90 saturate-[0.85]"
                 />
               ))}
             </div>
