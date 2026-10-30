@@ -18,6 +18,7 @@ import { getOrCreateState } from "@/lib/state/conversation";
 import type { HerRequestRow, LifeThreadRow, OpenLoopRow, RequestBeat } from "@/lib/types";
 import type { ChatModel } from "./provider";
 import { buildOpeningPrompt } from "./prompts";
+import { detectUserLanguage } from "./lang";
 import { openingSchema } from "./schemas";
 
 /**
@@ -260,6 +261,9 @@ export async function generateOpening(opts: {
     loop: chosen.loop,
     milestone: chosen.milestone,
     herDayLine: dayLine(dayCtx.day),
+    userLanguage: detectUserLanguage(
+      recent.filter((m) => m.role === "user").map((m) => m.content)
+    ),
     request: chosen.request
       ? {
           title: chosen.request.row.title,

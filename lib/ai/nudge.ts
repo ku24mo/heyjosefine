@@ -8,6 +8,7 @@ import { stageForFamiliarity } from "@/lib/persona/profile";
 import type { MessageRow } from "@/lib/types";
 import type { ChatModel } from "./provider";
 import { buildNudgePrompt } from "./prompts";
+import { detectUserLanguage } from "./lang";
 import { looksLikeQuestion } from "./rules";
 import { openingSchema } from "./schemas";
 
@@ -19,7 +20,7 @@ import { openingSchema } from "./schemas";
  */
 
 /** Conversation exits — silence after these is consent, not abandonment. */
-const EXIT = /\b(gtg|g2g|gotta go|talk (to )?u later|ttyl|brb|bye|cya|later|have to go|heading out|driving)\b/i;
+const EXIT = /\b(gtg|g2g|gotta go|talk (to )?u later|ttyl|brb|bye|cya|later|have to go|heading out|driving|me voy|tengo que irme|hablamos (luego|después|despues)|adiós|adios|chao|nos vemos)\b/i;
 
 /** His last message closed the loop — low-energy acknowledgments aren't
  *  an invitation to keep the thread alive. */
@@ -128,6 +129,9 @@ export async function generateNudge(opts: {
     summary: state.summary ?? "",
     minutesQuiet: window.minutesQuiet,
     herLastWasQuestion: window.herLastWasQuestion,
+    userLanguage: detectUserLanguage(
+      recent.filter((m) => m.role === "user").map((m) => m.content)
+    ),
     requestBeat: pending
       ? {
           title: pending.r.title,

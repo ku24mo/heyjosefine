@@ -16,6 +16,8 @@ import { semanticScoresFor } from "./retrieve";
 
 const EXTRACT_PROMPT = `You are the memory system for an AI companion. Analyze the latest exchange and output structured JSON.
 
+LANGUAGE: write all memories, episodes, open loops, and the summary in ENGLISH regardless of the exchange's language — storage is English-canonical for recall consistency.
+
 MEMORY RULES — be selective, not exhaustive:
 - OWNERSHIP: memories describe the USER only — the user's life, people, and world. The assistant has her own life (her dog Odin, her law school, her friends, her family). NEVER store something the ASSISTANT said about herself as a user memory. "assistant: my dog Odin stole a sock" → store nothing about a dog.
 - Store only what's worth knowing later: personal facts, goals, relationships, real preferences, emotional situations, concrete events.

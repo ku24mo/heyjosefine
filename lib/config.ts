@@ -60,6 +60,11 @@ export const CONFIG = {
     maxRetries: 2, // transient 429/5xx retries inside the AI SDK
   },
 
+  // Language matching — she mirrors the user's language. Kill switch.
+  lang: {
+    spanishEnabled: true,
+  },
+
   // Usage limits — guests get a taste, claimed accounts get the full free tier.
   usage: {
     guestTotalLimit: 30, // anonymous lifetime msgs → claim wall

@@ -34,6 +34,8 @@ export function buildSystemPrompt(opts: {
   dayVibe?: { mood: string; energy: number };
   /** her queue — recommendations she's taken on, with real progress */
   herRequests?: string;
+  /** detected language of HIS writing — she mirrors it, voice intact */
+  userLanguage?: "en" | "es";
 }): string {
   const { state, stage, tier, memories, openLoops, lifeThreads, threadStates, herDay, yesterdayHeadline, directives, intention, dayVibe } = opts;
   const stageInfo = PERSONA.stages[stage];
@@ -175,6 +177,11 @@ INTENTION: acts = ${intention.acts.join(" + ")}; openness = ${intention.openness
 - length: one_liner = literally a few words or an emoji. short = one bubble. medium = 1-2 bubbles. long = up to 4 bubbles (rare).
 - form: single = one bubble only. burst = 3-4 rapid micro-bubbles, each a beat ("wait", "no because—", the actual point) — how people text when they're invested. ramble = one bubble that's a real thought out loud, a little messy.`);
 
+  // ── Language — she mirrors his, voice travels ────────────────────────────
+  if (opts.userLanguage === "es") {
+    sections.push(`LANGUAGE: he writes in Spanish — reply in natural, idiomatic Spanish, the way a Swedish girl actually texts in Spanish. Her voice travels with her: still lowercase, still short bubbles, same emojis. Translate her register, don't just translate words — "lol" → "jaja", "omg" → "dios", her fillers become their natural Spanish equivalents. Odin is still Odin. Never announce or explain the switch — just do it. If he switches back to English, follow him there.`);
+  }
+
   // ── Response format ───────────────────────────────────────────────────────
   sections.push(`OUTPUT FORMAT — respond with a single JSON object:
 {
@@ -221,6 +228,8 @@ export function buildOpeningPrompt(opts: {
   /** a recommendation she's reporting progress on — strategy "request_update" */
   request?: { title: string; beat: string; note: string };
   userName?: string | null;
+  /** language he writes in — she opens in his language once established */
+  userLanguage?: "en" | "es";
 }): string {
   const { strategy, stage, summary, loop, thread, milestone, mediaSubject, herDayLine, request, userName } = opts;
   const stageInfo = PERSONA.stages[stage];
@@ -250,7 +259,7 @@ You are OPENING a conversation with ${userName ?? "someone"} you${stage === "new
 
 STRATEGY — ${strategy}: ${strategyText[strategy] ?? strategyText.normal}
 
-Rules: 1-3 short bubbles max (1-2 when a photo is attached). It must feel like a real text, not a notification. If there's no real reason to say more, say less.
+Rules: 1-3 short bubbles max (1-2 when a photo is attached). It must feel like a real text, not a notification. If there's no real reason to say more, say less.${opts.userLanguage === "es" ? "\nHe writes in Spanish — open in natural Spanish, same texting voice (lowercase, jaja, same emojis)." : ""}
 Output JSON: {"bubbles": ["..."]}`;
 }
 
@@ -267,6 +276,8 @@ export function buildNudgePrompt(opts: {
   herLastWasQuestion: boolean;
   /** a pending report on something he recommended — valid nudge ammo */
   requestBeat?: { title: string; note: string } | null;
+  /** language he writes in — the nudge matches it */
+  userLanguage?: "en" | "es";
 }): string {
   const { stage, summary, minutesQuiet, herLastWasQuestion, requestBeat } = opts;
   const stageInfo = PERSONA.stages[stage];
@@ -292,5 +303,5 @@ Rules:
 - NEVER "u there?", "hello?", "did you fall asleep lol", "you gone?", guilt, or pressure — a nudge is her thought, not a check that he's still around.
 - Never re-ask or rephrase a question he already ignored.
 - ${herLastWasQuestion ? "Your last message already asked something — this MUST be a statement or observation, not another question. Two questions in a row reads needy." : "Your last message was a statement — a light question is allowed here (not required)."}
-Output JSON: {"bubbles": ["..."]}`;
+${opts.userLanguage === "es" ? "- He writes in Spanish — nudge in natural Spanish, same texting voice.\n" : ""}Output JSON: {"bubbles": ["..."]}`;
 }
