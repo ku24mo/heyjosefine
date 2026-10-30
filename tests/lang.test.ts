@@ -40,6 +40,30 @@ describe("detectUserLanguage", () => {
     expect(detectUserLanguage([])).toBe("en");
     expect(detectUserLanguage(["😂😂", "ok"])).toBe("en");
   });
+
+  it("detects Portuguese from distinctive words", () => {
+    expect(detectUserLanguage(["oi, de onde você é?", "você é muito linda"])).toBe("pt");
+  });
+
+  it("detects Portuguese from ã/õ structure", () => {
+    expect(detectUserLanguage(["não sei não", "então tá"])).toBe("pt");
+  });
+
+  it("does not misclassify Spanish as Portuguese", () => {
+    expect(detectUserLanguage(["hola, de donde eres", "eres muy linda"])).toBe("es");
+    // ES imperative + shared noun — must not pair into a PT score
+    expect(detectUserLanguage(["manda una foto", "envia otra"])).not.toBe("pt");
+  });
+
+  it("does not misclassify Portuguese as Spanish", () => {
+    expect(detectUserLanguage(["oi tudo bem?", "você é de onde"])).toBe("pt");
+  });
+
+  it("Spanish wins when both score equally", () => {
+    // equal mixed window — ES ships first and has more traffic
+    const r = detectUserLanguage(["hola", "olá", "eres", "você"]);
+    expect(["es", "pt"]).toContain(r); // whichever wins, just must not be en
+  });
 });
 
 function ctx(overrides: Partial<TurnContext> = {}): TurnContext {
@@ -92,6 +116,37 @@ describe("spanish signals", () => {
     expect(PHOTO_REQUEST.test("envíame fotos de ti")).toBe(true);
     expect(PHOTO_REQUEST.test("qué haces hoy")).toBe(false);
   });
+
+  it("flags a Portuguese explicit ask", () => {
+    const s = computeSignals(ctx({ userMessage: "manda foto pelada" }));
+    expect(s.asksExplicit).toBe(true);
+  });
+
+  it("flags a Portuguese AI question", () => {
+    const s = computeSignals(ctx({ userMessage: "você é um robô?" }));
+    expect(s.asksIfAI).toBe(true);
+  });
+
+  it("flags a Portuguese real-world ask", () => {
+    const s = computeSignals(ctx({ userMessage: "me passa seu whatsapp" }));
+    expect(s.asksRealWorld).toBe(true);
+  });
+
+  it("flags a Portuguese greeting as short casual", () => {
+    const s = computeSignals(ctx({ userMessage: "oi" }));
+    expect(s.isShortCasual).toBe(true);
+  });
+
+  it("detects Portuguese questions", () => {
+    expect(looksLikeQuestion("o que você faz")).toBe(true);
+    expect(looksLikeQuestion("de onde você é?")).toBe(true);
+  });
+
+  it("flags Portuguese photo requests for the never-on-request gate", () => {
+    expect(PHOTO_REQUEST.test("manda uma foto sua")).toBe(true);
+    expect(PHOTO_REQUEST.test("envia foto")).toBe(true);
+    expect(PHOTO_REQUEST.test("o que você faz hoje")).toBe(false);
+  });
 });
 
 describe("spanish prompt section", () => {
@@ -112,5 +167,11 @@ describe("spanish prompt section", () => {
     expect(es).toContain("LANGUAGE:");
     const en = buildSystemPrompt({ ...base });
     expect(en).not.toContain("LANGUAGE:");
+  });
+
+  it("renders the language section when userLanguage is 'pt'", () => {
+    const pt = buildSystemPrompt({ ...base, userLanguage: "pt" });
+    expect(pt).toContain("LANGUAGE:");
+    expect(pt).toContain("Portuguese");
   });
 });

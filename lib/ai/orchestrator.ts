@@ -97,7 +97,7 @@ function normalizeTapback(emoji: string | undefined | null): string | null {
 /** He's explicitly asking for a photo → any media proposal this turn dies.
  *  She shares pics when SHE feels like it — never on demand. */
 export const PHOTO_REQUEST =
-  /\b(send|show|take|snap|post|give|gimme|let me see|lemme see)\b[^.!?]*\b(pic|pics|photo|photos|selfie|picture|pictures|img|image)\b|\b(pic|pics|photo|photos|selfie|selfies|picture|pictures)\b[^.!?]*\b(please|plz|pls|now|of you|of u|urself|yourself)\b|\bpic\s*(plz|pls|please|\?)|\b(mánda|manda|enví[ae]|pasa|enséñ[ae]|enseñ[ae]|saca|tóma|toma)me?\b[^.!?]*\b(foto|fotos|selfie|imagen)\b|\bfotos?\b[^.!?]*\b(de ti|tuy[ao]s?|porfa|por favor)\b/i;
+  /\b(send|show|take|snap|post|give|gimme|let me see|lemme see)\b[^.!?]*\b(pic|pics|photo|photos|selfie|picture|pictures|img|image)\b|\b(pic|pics|photo|photos|selfie|selfies|picture|pictures)\b[^.!?]*\b(please|plz|pls|now|of you|of u|urself|yourself)\b|\bpic\s*(plz|pls|please|\?)|\b(mánda|manda|enví[ae]|pasa|enséñ[ae]|enseñ[ae]|saca|tóma|toma)me?\b[^.!?]*\b(foto|fotos|selfie|imagen)\b|\bfotos?\b[^.!?]*\b(de ti|tuy[ao]s?|porfa|por favor)\b|\b(manda|envia|mostra|tira|posta)\b[^.!?]*\b(foto|fotos|selfie|nude|pack)\b|\bfoto\b[^.!?]*\b(sua|de você|de voce|por favor)\b/i;
 
 /** She said goodnight within the last ~8h — that's binding, not a hint.
  *  Scans her last few messages: a post-goodnight "ugh stop 😭" without a

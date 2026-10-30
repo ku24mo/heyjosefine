@@ -20,7 +20,7 @@ import { openingSchema } from "./schemas";
  */
 
 /** Conversation exits — silence after these is consent, not abandonment. */
-const EXIT = /\b(gtg|g2g|gotta go|talk (to )?u later|ttyl|brb|bye|cya|later|have to go|heading out|driving|me voy|tengo que irme|hablamos (luego|después|despues)|adiós|adios|chao|nos vemos)\b/i;
+const EXIT = /\b(gtg|g2g|gotta go|talk (to )?u later|ttyl|brb|bye|cya|later|have to go|heading out|driving|me voy|tengo que irme|hablamos (luego|después|despues)|adiós|adios|chao|nos vemos|tchau|tenho que ir|falo com você (depois|mais tarde)|até mais|ate mais|fui)\b/i;
 
 /** His last message closed the loop — low-energy acknowledgments aren't
  *  an invitation to keep the thread alive. */

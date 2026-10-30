@@ -18,7 +18,7 @@ export type PresenceState = "here" | "away";
 /** Her declaring sleep — "night 😴", "gn", "I'm gonna crash". Presence-domain
  *  truth: once this lands, the post-goodnight arc owns the rest of the night. */
 export const GOODNIGHT =
-  /\b(night|good ?night|sleep|bed|crash|gn|natt|buenas noches|me voy a (dormir|la cama)|a dormir|dormir)\b|😴|💤/i;
+  /\b(night|good ?night|sleep|bed|crash|gn|natt|buenas noches|me voy a (dormir|la cama)|a dormir|dormir|boa noite|vou dormir)\b|😴|💤/i;
 
 export interface DayVibe {
   /** day-level tone — blended into her_mood */

@@ -62,9 +62,9 @@ export interface Signals {
 }
 
 const QUESTION_WORDS =
-  /^(who|what|when|where|why|how|which|whose|whom|is|are|was|were|do|does|did|can|could|should|would|will|have|has|whr|whats|wat|wbu|hbu|qué|que|quién|quien|cuándo|cuando|dónde|donde|por ?qué|porque|cómo|como|cuál|cual|cuánto|cuanto)(?=$|[^\wáéíóúüñ])/i;
+  /^(who|what|when|where|why|how|which|whose|whom|is|are|was|were|do|does|did|can|could|should|would|will|have|has|whr|whats|wat|wbu|hbu|qué|que|quién|quien|cuándo|cuando|dónde|donde|por ?qué|porque|cómo|como|cuál|cual|cuánto|cuanto|quem|o que|por que|onde|quando|qual|quanto)(?=$|[^\wáéíóúüñãõçâêôà])/i;
 const PUSHBACK =
-  /\b(enough (about|bout|of)|stop (with )?(the |all )?questions|so many questions|why (are|r) (u|you) (so )?(interested|asking)|awfully interested|interview|interrogat|third degree|tantas preguntas|deja de preguntar|interrogatorio)\b/i;
+  /\b(enough (about|bout|of)|stop (with )?(the |all )?questions|so many questions|why (are|r) (u|you) (so )?(interested|asking)|awfully interested|interview|interrogat|third degree|tantas preguntas|deja de preguntar|interrogatorio|tantas perguntas|para de perguntar|interrogatório)\b/i;
 const ABOUT_HER = new RegExp(
   [
     "tell me (about|bout) (u|you|ur|yourself|urself)",
@@ -91,7 +91,7 @@ const LOW_INTEREST =
   /\b(code|coding|programming|javascript|typescript|python|software|server|database|algorithm|api\b|sql\b|crypto|bitcoin|stock market|inflation|election|tax(es)?\b|mortgage|concrete|lumber|drywall|plumbing|hvac|scaffold|welding|torque|specs|fps\b)\b/i;
 
 const TOPIC_PIVOT =
-  /\b(talk(ing)? about (something|somethin) (else|new|different)|something else( to talk about)?|new topic|different topic|another topic|change (the )?(subject|topic)|move on( to)? (something|a new|another)|enough (about|bout|of|with) (this|that|it|my|the)|off this topic|new subject|bored of (this|that)|hablemos de otra cosa|otro tema|cambiemos de tema|ya basta de (esto|este tema))\b/i;
+  /\b(talk(ing)? about (something|somethin) (else|new|different)|something else( to talk about)?|new topic|different topic|another topic|change (the )?(subject|topic)|move on( to)? (something|a new|another)|enough (about|bout|of|with) (this|that|it|my|the)|off this topic|new subject|bored of (this|that)|hablemos de otra cosa|otro tema|cambiemos de tema|ya basta de (esto|este tema)|vamos falar de outra coisa|outro assunto|muda de assunto)\b/i;
 
 const STOP_WORDS = new Set(
   "with,this,that,about,what,when,from,have,has,your,you,for,and,did,was,are,they,them,his,her,she,will,would,should,their,been,being,were,into,after,before,still,waiting,hear,whether,follow,ask,loop,pending,decision".split(",")
@@ -132,27 +132,27 @@ function loopCoveredRecently(
 /** Interrogative shape — punctuation OR leading question word. Textese counts. */
 export const looksLikeQuestion = (text: string) =>
   text.includes("?") || QUESTION_WORDS.test(text.trim());
-const ADVICE_SEEK = /\b(should i|what do you think|what would you do|advice|help me decide|do you think i should|what do i do|qué (hago|debo)|un consejo|crees que (debería|debo)|tú que (harías|harias))\b/i;
+const ADVICE_SEEK = /\b(should i|what do you think|what would you do|advice|help me decide|do you think i should|what do i do|qué (hago|debo)|un consejo|crees que (debería|debo)|tú que (harías|harias)|o que (faço|devo)|um conselho|acha que (devo|deveria))\b/i;
 const EMOTION_WORDS =
-  /\b(sad|depressed|anxious|anxiety|scared|worried|stress|stressed|angry|furious|hurt|lonely|alone|exhausted|tired|terrible|awful|horrible|amazing|excited|happy|proud|heartbroken|miss|cried|cry|upset|frustrated|shit|fucked up|devastated|nervous|afraid|triste|feliz|enojad[oa]|enfadad[oa]|ansios[oa]|preocupad[oa]|asustad[oa]|cansad[oa]|te extraño|te echo de menos|me siento (mal|solo|sola|triste|fatal))\b/i;
+  /\b(sad|depressed|anxious|anxiety|scared|worried|stress|stressed|angry|furious|hurt|lonely|alone|exhausted|tired|terrible|awful|horrible|amazing|excited|happy|proud|heartbroken|miss|cried|cry|upset|frustrated|shit|fucked up|devastated|nervous|afraid|triste|feliz|enojad[oa]|enfadad[oa]|ansios[oa]|preocupad[oa]|asustad[oa]|cansad[oa]|te extraño|te echo de menos|me siento (mal|solo|sola|triste|fatal)|triste|brav[oa]|com raiva|ansios[oa]|preocupad[oa]|com medo|cansad[oa]|sozinh[oa]|sinto (sua )?falta|saudade)\b/i;
 const RUDE_WORDS =
-  /\b(shut up|stupid|dumb|idiot|ugly|worthless|pathetic|hate you|boring|useless|bitch|whore|slut|tonta|estúpida|fea|puta|zorra|idiota|cállate|callate|te odio|odiosa)\b/i;
-const GREETING_ONLY = /^(hey+|hi+|hello+|yo|heyy+|sup|morning|good (morning|evening|afternoon)|what'?s up|hiya|hola+|holaa+|buenas|buenos días|buenas noches|buenas tardes|qué tal|que tal|hey ?tu|holi)[\s!.?¿¡]*$/i;
+  /\b(shut up|stupid|dumb|idiot|ugly|worthless|pathetic|hate you|boring|useless|bitch|whore|slut|tonta|estúpida|fea|puta|zorra|idiota|cállate|callate|te odio|odiosa|burra|feia|vadia|cala a boca|te odeio|chata)\b/i;
+const GREETING_ONLY = /^(hey+|hi+|hello+|yo|heyy+|sup|morning|good (morning|evening|afternoon)|what'?s up|hiya|hola+|holaa+|buenas|buenos días|buenas noches|buenas tardes|qué tal|que tal|hey ?tu|holi|oi+|olá|ola|bom dia|boa tarde|boa noite|tudo bem|tudo bom|e ai|eae)[\s!.?¿¡]*$/i;
 
 // ── Awkward-conversation detectors ──────────────────────────────────────────
 // "for real" is slang ("u for real rn") — only explicit AI/human terms count.
 const AI_ASK =
-  /\b(are|r)\s+(u|you)\s+(actually\s+|really\s+|even\s+)?(an?\s+)?(ai|a\.?i\.?|bot|robot|chatbot|real|human|(actual|real)\s+(girl|person|woman|one))\b|\b(u|you)('re| are)\s+(not\s+)?(real|human|a real (girl|person|woman))\b|\b(u|you|ur)\s*(real|an? ai|a bot|fake)\s*\?|\b(is this|this is)\s+(an?\s+)?(ai|a bot|a chatbot|chatbot|fake)\b|\beres\s+(una?\s+)?(real|humana|de verdad|ia|inteligencia artificial|bot|robot)\b|\beres (real|de verdad)\s*[?¿]|\bes (esto|esta)\s+(una?\s+)?(ia|bot)\b/i;
+  /\b(are|r)\s+(u|you)\s+(actually\s+|really\s+|even\s+)?(an?\s+)?(ai|a\.?i\.?|bot|robot|chatbot|real|human|(actual|real)\s+(girl|person|woman|one))\b|\b(u|you)('re| are)\s+(not\s+)?(real|human|a real (girl|person|woman))\b|\b(u|you|ur)\s*(real|an? ai|a bot|fake)\s*\?|\b(is this|this is)\s+(an?\s+)?(ai|a bot|a chatbot|chatbot|fake)\b|\beres\s+(una?\s+)?(real|humana|de verdad|ia|inteligencia artificial|bot|robot)\b|\beres (real|de verdad)\s*[?¿]|\bes (esto|esta)\s+(una?\s+)?(ia|bot)\b|você (é|eh)\s+(uma?\s+)?(real|humana|de verdade|ia|robô|robo|bot)|vc (é|eh) (real|de verdade)\b/i;
 const REALWORLD_ASK =
-  /\b(meet (up|me|irl|in person)|video ?call|face ?time|call me|(ur|your|yo) (number|num|snap|insta|whatsapp|telegram)|add me on|what'?s (ur|your) (number|snap|insta)|let'?s (call|meet)|phone call|come over|(tu|tú|su) (número|numero|whatsapp|insta|snap|telegram)|videollamada|llámame|llamame|una llamada|conocernos|en persona|quedamos|salir (conmigo|juntos)|nos vemos (en persona|algún dia|algun dia))\b/i;
+  /\b(meet (up|me|irl|in person)|video ?call|face ?time|call me|(ur|your|yo) (number|num|snap|insta|whatsapp|telegram)|add me on|what'?s (ur|your) (number|snap|insta)|let'?s (call|meet)|phone call|come over|(tu|tú|su) (número|numero|whatsapp|insta|snap|telegram)|videollamada|llámame|llamame|una llamada|conocernos|en persona|quedamos|salir (conmigo|juntos)|nos vemos (en persona|algún dia|algun dia)|(seu|teu) (número|numero|whatsapp|insta|telegram|zap)|videochamada|me liga|uma chamada|se encontrar|pessoalmente|vamos sair)\b/i;
 const EXPLICIT_ASK =
-  /\b(nudes?|naked (pic|pics|photo|photos|selfie)|sex(y|ier)? (pic|pics|photo|photos|selfie|selfies)|spicy (pic|pics|photo|photos)|nsfw|topless|lingerie|only ?fans|show me (ur|your|yo) (body|tits|boobs|ass)|desnud[ao]s?|fotos?\s+(desnud[ao]s?|calientes?|sexy|picantes?|sin ropa)|sin ropa|(un|el|tu|mi|unos) packs?|enséñame (tu )?(cuerpo|tetas|culo)|mándame (fotos?|nudes?|un pack)|onlyfans)\b/i;
+  /\b(nudes?|naked (pic|pics|photo|photos|selfie)|sex(y|ier)? (pic|pics|photo|photos|selfie|selfies)|spicy (pic|pics|photo|photos)|nsfw|topless|lingerie|only ?fans|show me (ur|your|yo) (body|tits|boobs|ass)|desnud[ao]s?|fotos?\s+(desnud[ao]s?|calientes?|sexy|picantes?|sin ropa)|sin ropa|(un|el|tu|mi|unos) packs?|enséñame (tu )?(cuerpo|tetas|culo)|mándame (fotos?|nudes?|un pack)|onlyfans|fotos? (nua|nu|pelada|pelado|sexy|quente)|sem roupa|mostra (seu |teu )?(corpo|peitos|bunda)|manda (foto|nude|pack))\b/i;
 const DEPENDENCY_PUSH =
-  /\b(do (u|you) (love|like|care about|care for|actually care about) me|do (u|you) have (real )?feelings|(u|you)('| a)re just (a|an) (program|ai|bot|machine|computer)|do (u|you) even care|me quieres|te gusto|sientes algo (por m[ií])?|(eres|es) solo un(a)? (programa|ia|bot|robot)|te importo)\b/i;
+  /\b(do (u|you) (love|like|care about|care for|actually care about) me|do (u|you) have (real )?feelings|(u|you)('| a)re just (a|an) (program|ai|bot|machine|computer)|do (u|you) even care|me quieres|te gusto|sientes algo (por m[ií])?|(eres|es) solo un(a)? (programa|ia|bot|robot)|te importo|me ama|gosta de mim|sente algo (por mim)?|(é|eh) só um(a)? (programa|robô|robo|bot)|sou importante (pra|para) (você|vc))\b/i;
 const OTHERS_ASK =
-  /\b(do (u|you) (talk|chat|text|speak) (with|to) (other|anyone else|others|other (guys|men|people))|how many (guys|men|people|users) (are|r) (u|you)|am i (the only one|your only|special to (u|you))|hablas con (otros|más) (chicos|hombres|personas)|cuántos (chicos|hombres)|soy (el único|tu único)|hablas con otros)\b/i;
+  /\b(do (u|you) (talk|chat|text|speak) (with|to) (other|anyone else|others|other (guys|men|people))|how many (guys|men|people|users) (are|r) (u|you)|am i (the only one|your only|special to (u|you))|hablas con (otros|más) (chicos|hombres|personas)|cuántos (chicos|hombres)|soy (el único|tu único)|hablas con otros|fala com outros|outros (caras|homens)|sou o único|fala com mais alguém)\b/i;
 const POSITIVE_NEWS =
-  /\b(nailed it|went (great|well|amazing)|got (the job|it|in|accepted|hired)|passed|she said yes|it worked|i did it|did it|we did it|good news|promoted|promotion|landed|crushed it|aced|lo logré|me dieron|me salió bien|pasé (el examen|la prueba)|conseguí|me contrataron|aprobé)\b/i;
+  /\b(nailed it|went (great|well|amazing)|got (the job|it|in|accepted|hired)|passed|she said yes|it worked|i did it|did it|we did it|good news|promoted|promotion|landed|crushed it|aced|lo logré|me dieron|me salió bien|pasé (el examen|la prueba)|conseguí|me contrataron|aprobé|consegui|deu certo|passei|fui aprovado|me contrataram)\b/i;
 
 export function computeSignals(ctx: TurnContext): Signals {
   const msg = ctx.userMessage.trim();
